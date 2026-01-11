@@ -1,0 +1,394 @@
+name: Build Combat Assist Mod (1.20.1 - Reach + Smooth Aim - RIGHT ALT)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup-and-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+    
+    - name: Setup Gradle
+      uses: gradle/gradle-build-action@v2
+      with:
+        gradle-version: 8.1
+    
+    - name: Clean everything
+      run: |
+        rm -rf src/ build/ .gradle/ gradle/ *.gradle *.properties gradlew* .gitignore
+        find . -name "*.java" -delete
+        find . -name "*.json" -delete
+    
+    - name: Create directories
+      run: |
+        mkdir -p src/main/java/com/combatassist/mixin
+        mkdir -p src/main/resources
+    
+    - name: Write CombatAssistMod.java
+      shell: bash
+      run: |
+        cat << 'EOF' > src/main/java/com/combatassist/CombatAssistMod.java
+        package com.combatassist;
+        
+        import net.fabricmc.api.ClientModInitializer;
+        
+        public class CombatAssistMod implements ClientModInitializer {
+            public static final String MOD_ID = "combatassist";
+            public static boolean isEnabled = false;
+            
+            @Override
+            public void onInitializeClient() {
+                System.out.println("[Combat Assist] Mod loaded!");
+                System.out.println("[Combat Assist] Press RIGHT ALT to toggle!");
+                System.out.println("[Combat Assist] Features: 3.5 reach + Smooth aim to headbox!");
+            }
+        }
+        EOF
+    
+    - name: Write MinecraftClientMixin.java
+      shell: bash
+      run: |
+        cat << 'EOF' > src/main/java/com/combatassist/mixin/MinecraftClientMixin.java
+        package com.combatassist.mixin;
+        
+        import com.combatassist.CombatAssistMod;
+        import net.minecraft.client.MinecraftClient;
+        import net.minecraft.client.network.ClientPlayerEntity;
+        import net.minecraft.entity.Entity;
+        import net.minecraft.entity.player.PlayerEntity;
+        import net.minecraft.text.Text;
+        import net.minecraft.util.math.Box;
+        import net.minecraft.util.math.Vec3d;
+        import org.lwjgl.glfw.GLFW;
+        import org.spongepowered.asm.mixin.Mixin;
+        import org.spongepowered.asm.mixin.Shadow;
+        import org.spongepowered.asm.mixin.injection.At;
+        import org.spongepowered.asm.mixin.injection.Inject;
+        import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+        
+        import java.util.List;
+        
+        @Mixin(MinecraftClient.class)
+        public class MinecraftClientMixin {
+            @Shadow
+            public ClientPlayerEntity player;
+            
+            private boolean wasAltPressed = false;
+            
+            /**
+             * Combat Assist Mod - Minecraft 1.20.1
+             * 
+             * المميزات:
+             * ✅ Extended Reach: 3.5 blocks (بدل 3.0)
+             * ✅ Smooth Aim Assist: يسحب ناحية headbox بنسبة 8-12%
+             * ✅ Toggle بـ RIGHT ALT
+             * 
+             * ⚠️ تحذير: هذا المود يعتبر غش في معظم السيرفرات!
+             * استخدمه على مسؤوليتك الشخصية!
+             */
+            @Inject(method = "tick", at = @At("HEAD"))
+            private void onClientTick(CallbackInfo ci) {
+                if (this.player == null) return;
+                
+                MinecraftClient client = (MinecraftClient)(Object)this;
+                
+                // Toggle بـ RIGHT ALT (GLFW_KEY_RIGHT_ALT)
+                boolean isAltPressed = GLFW.glfwGetKey(
+                    client.getWindow().getHandle(), 
+                    GLFW.GLFW_KEY_RIGHT_ALT
+                ) == GLFW.GLFW_PRESS;
+                
+                if (isAltPressed && !wasAltPressed) {
+                    CombatAssistMod.isEnabled = !CombatAssistMod.isEnabled;
+                    String status = CombatAssistMod.isEnabled ? 
+                        "§a§lON §7(Reach 3.5 + Aim Assist)" : "§c§lOFF";
+                    this.player.sendMessage(
+                        Text.literal("§6§l[Combat Assist] " + status), 
+                        true
+                    );
+                }
+                
+                wasAltPressed = isAltPressed;
+                
+                // لو المود مش شغال، متعملش حاجة
+                if (!CombatAssistMod.isEnabled) return;
+                
+                // البحث عن أقرب لاعب في المدى الموسع (3.5 blocks)
+                PlayerEntity closestPlayer = findClosestPlayer(3.5);
+                
+                if (closestPlayer != null) {
+                    // تطبيق smooth aim assist ناحية الـ headbox
+                    applySmoothAimAssist(closestPlayer);
+                }
+            }
+            
+            /**
+             * البحث عن أقرب لاعب في المدى المحدد
+             */
+            private PlayerEntity findClosestPlayer(double maxDistance) {
+                if (this.player == null || this.player.getWorld() == null) return null;
+                
+                PlayerEntity closest = null;
+                double closestDist = maxDistance;
+                
+                List<Entity> entities = this.player.getWorld().getOtherEntities(
+                    this.player, 
+                    this.player.getBoundingBox().expand(maxDistance)
+                );
+                
+                for (Entity entity : entities) {
+                    if (!(entity instanceof PlayerEntity)) continue;
+                    if (entity == this.player) continue;
+                    
+                    PlayerEntity target = (PlayerEntity) entity;
+                    double distance = this.player.distanceTo(target);
+                    
+                    if (distance < closestDist) {
+                        closestDist = distance;
+                        closest = target;
+                    }
+                }
+                
+                return closest;
+            }
+            
+            /**
+             * تطبيق Smooth Aim Assist ناحية headbox اللاعب
+             */
+            private void applySmoothAimAssist(PlayerEntity target) {
+                if (this.player == null) return;
+                
+                // حساب موقع الـ headbox (أعلى الـ hitbox)
+                Box targetBox = target.getBoundingBox();
+                Vec3d headPos = new Vec3d(
+                    targetBox.minX + (targetBox.maxX - targetBox.minX) / 2.0,
+                    targetBox.maxY - 0.2, // شوية تحت الرأس بالظبط
+                    targetBox.minZ + (targetBox.maxZ - targetBox.minZ) / 2.0
+                );
+                
+                // موقع اللاعب (العين)
+                Vec3d playerPos = this.player.getEyePos();
+                
+                // حساب الاتجاه المطلوب
+                Vec3d direction = headPos.subtract(playerPos).normalize();
+                
+                // تحويل الاتجاه لـ yaw و pitch
+                double horizontalDistance = Math.sqrt(direction.x * direction.x + direction.z * direction.z);
+                float targetYaw = (float) Math.toDegrees(Math.atan2(-direction.x, direction.z));
+                float targetPitch = (float) Math.toDegrees(Math.atan2(-direction.y, horizontalDistance));
+                
+                // الزوايا الحالية
+                float currentYaw = this.player.getYaw();
+                float currentPitch = this.player.getPitch();
+                
+                // حساب الفرق
+                float yawDiff = angleDifference(targetYaw, currentYaw);
+                float pitchDiff = targetPitch - currentPitch;
+                
+                // نسبة المساعدة (8-12% smooth assist)
+                // كل ما اللاعب أقرب، المساعدة أقوى
+                double distance = this.player.distanceTo(target);
+                float assistStrength = (float) (0.12 - (distance / 35.0)); // 12% لما قريب، 8% لما بعيد
+                assistStrength = Math.max(0.08f, Math.min(0.12f, assistStrength));
+                
+                // تطبيق المساعدة الخفيفة (smooth)
+                float newYaw = currentYaw + (yawDiff * assistStrength);
+                float newPitch = currentPitch + (pitchDiff * assistStrength);
+                
+                // تحديد الـ pitch
+                newPitch = Math.max(-90.0f, Math.min(90.0f, newPitch));
+                
+                // تطبيق الدوران
+                this.player.setYaw(newYaw);
+                this.player.setPitch(newPitch);
+            }
+            
+            /**
+             * حساب الفرق بين زاويتين (wraparound)
+             */
+            private float angleDifference(float a, float b) {
+                float diff = (a - b) % 360.0f;
+                if (diff > 180.0f) diff -= 360.0f;
+                if (diff < -180.0f) diff += 360.0f;
+                return diff;
+            }
+        }
+        EOF
+    
+    - name: Write ClientPlayerInteractionManagerMixin.java
+      shell: bash
+      run: |
+        cat << 'EOF' > src/main/java/com/combatassist/mixin/ClientPlayerInteractionManagerMixin.java
+        package com.combatassist.mixin;
+        
+        import com.combatassist.CombatAssistMod;
+        import net.minecraft.client.network.ClientPlayerInteractionManager;
+        import org.spongepowered.asm.mixin.Mixin;
+        import org.spongepowered.asm.mixin.injection.At;
+        import org.spongepowered.asm.mixin.injection.Inject;
+        import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+        
+        @Mixin(ClientPlayerInteractionManager.class)
+        public class ClientPlayerInteractionManagerMixin {
+            
+            /**
+             * تعديل الـ Reach Distance من 3.0 → 3.5 blocks
+             * ده بيخليك تضرب من بعيد شوية
+             */
+            @Inject(method = "getReachDistance", at = @At("HEAD"), cancellable = true)
+            private void onGetReachDistance(CallbackInfoReturnable<Float> cir) {
+                if (CombatAssistMod.isEnabled) {
+                    // Extended reach: 3.5 blocks (بدل 3.0)
+                    cir.setReturnValue(3.5f);
+                }
+            }
+        }
+        EOF
+    
+    - name: Write fabric.mod.json
+      shell: bash
+      run: |
+        cat << 'EOF' > src/main/resources/fabric.mod.json
+        {
+          "schemaVersion": 1,
+          "id": "combatassist",
+          "version": "1.0.0",
+          "name": "Combat Assist",
+          "description": "Press RIGHT ALT to toggle! Extended reach (3.5 blocks) + Smooth aim assist to headbox (8-12%). USE AT YOUR OWN RISK!",
+          "authors": ["SIGMAxox"],
+          "license": "MIT",
+          "environment": "client",
+          "entrypoints": {
+            "client": ["com.combatassist.CombatAssistMod"]
+          },
+          "mixins": ["combatassist.mixins.json"],
+          "depends": {
+            "fabricloader": ">=0.14.19",
+            "minecraft": "1.20.1"
+          }
+        }
+        EOF
+    
+    - name: Write combatassist.mixins.json
+      shell: bash
+      run: |
+        cat << 'EOF' > src/main/resources/combatassist.mixins.json
+        {
+          "required": true,
+          "minVersion": "0.8",
+          "package": "com.combatassist.mixin",
+          "compatibilityLevel": "JAVA_17",
+          "client": [
+            "MinecraftClientMixin",
+            "ClientPlayerInteractionManagerMixin"
+          ],
+          "injectors": {"defaultRequire": 1}
+        }
+        EOF
+    
+    - name: Write build.gradle
+      shell: bash
+      run: |
+        cat << 'EOF' > build.gradle
+        plugins {
+            id 'fabric-loom' version '1.2-SNAPSHOT'
+            id 'maven-publish'
+        }
+        
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+        
+        archivesBaseName = "combat-assist"
+        version = "1.0.0"
+        group = "com.combatassist"
+        
+        repositories {
+            maven { url 'https://maven.fabricmc.net/' }
+            maven {
+                url 'https://www.cursemaven.com'
+                content { includeGroup "curse.maven" }
+            }
+        }
+        
+        dependencies {
+            minecraft "com.mojang:minecraft:1.20.1"
+            mappings "net.fabricmc:yarn:1.20.1+build.10:v2"
+            modImplementation "net.fabricmc:fabric-loader:0.14.19"
+            modImplementation "curse.maven:fabric-api-306612:4902738"
+        }
+        
+        processResources {
+            inputs.property "version", project.version
+            filesMatching("fabric.mod.json") {
+                expand "version": project.version
+            }
+        }
+        
+        tasks.withType(JavaCompile).configureEach {
+            it.options.encoding = "UTF-8"
+            it.options.release = 17
+        }
+        
+        java {
+            withSourcesJar()
+        }
+        
+        jar {
+            from("LICENSE") {
+                rename { "${it}_${project.archivesBaseName}"}
+            }
+        }
+        EOF
+    
+    - name: Write gradle.properties
+      run: echo 'org.gradle.jvmargs=-Xmx2G' > gradle.properties
+    
+    - name: Write settings.gradle
+      shell: bash
+      run: |
+        cat << 'EOF' > settings.gradle
+        pluginManagement {
+            repositories {
+                maven {
+                    name = 'Fabric'
+                    url = 'https://maven.fabricmc.net/'
+                }
+                gradlePluginPortal()
+            }
+        }
+        rootProject.name = 'combat-assist'
+        EOF
+    
+    - name: Create Gradle Wrapper
+      run: gradle wrapper --gradle-version 8.1
+    
+    - name: Grant execute permission
+      run: chmod +x gradlew
+    
+    - name: Verify all files
+      run: |
+        echo "=== Source files ==="
+        find src -type f -exec echo {} \; -exec cat {} \;
+        echo ""
+        echo "=== Config files ==="
+        cat build.gradle
+        echo ""
+        cat settings.gradle
+    
+    - name: Build mod
+      run: ./gradlew clean build --no-daemon --stacktrace
+    
+    - name: List build output
+      run: ls -lah build/libs/
+    
+    - name: Upload Mod JAR
+      uses: actions/upload-artifact@v4
+      with:
+        name: combat-assist-v1.0.0-mc1.20.1
+        path: build/libs/*.jar
