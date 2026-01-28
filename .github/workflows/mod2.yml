@@ -1,0 +1,415 @@
+name: Build Advanced Stealth Dupe Test (1.20.1 - Anti-Detection)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup-and-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+    
+    - name: Setup Gradle
+      uses: gradle/gradle-build-action@v2
+      with:
+        gradle-version: 8.1
+    
+    - name: Clean everything
+      run: |
+        rm -rf src/ build/ .gradle/ gradle/ *.gradle *.properties gradlew* .gitignore
+        find . -name "*.java" -delete
+        find . -name "*.json" -delete
+    
+    - name: Create directories
+      run: |
+        mkdir -p src/main/java/com/stealthdupe/mixin
+        mkdir -p src/main/resources
+    
+    - name: Write StealthDupeMod.java
+      shell: bash
+      run: |
+        cat << 'EOF' > src/main/java/com/stealthdupe/StealthDupeMod.java
+        package com.stealthdupe;
+        
+        import net.fabricmc.api.ClientModInitializer;
+        
+        public class StealthDupeMod implements ClientModInitializer {
+            public static final String MOD_ID = "stealthdupe";
+            
+            @Override
+            public void onInitializeClient() {
+                System.out.println("=============================================");
+                System.out.println("[Stealth Test] ADVANCED ANTI-CHEAT TEST");
+                System.out.println("[Stealth Test] FOR SECURITY TESTING ONLY!");
+                System.out.println("[Stealth Test] Press RIGHT ALT for stealth dupe");
+                System.out.println("[Stealth Test] Uses: Randomization, Delays, Human-like patterns");
+                System.out.println("=============================================");
+            }
+        }
+        EOF
+    
+    - name: Write MinecraftClientMixin.java
+      shell: bash
+      run: |
+        cat << 'EOF' > src/main/java/com/stealthdupe/mixin/MinecraftClientMixin.java
+        package com.stealthdupe.mixin;
+        
+        import net.minecraft.client.MinecraftClient;
+        import net.minecraft.client.network.ClientPlayerEntity;
+        import net.minecraft.item.ItemStack;
+        import net.minecraft.network.packet.c2s.play.ClickSlotC2SPacket;
+        import net.minecraft.screen.slot.SlotActionType;
+        import net.minecraft.text.Text;
+        import org.lwjgl.glfw.GLFW;
+        import org.spongepowered.asm.mixin.Mixin;
+        import org.spongepowered.asm.mixin.Shadow;
+        import org.spongepowered.asm.mixin.injection.At;
+        import org.spongepowered.asm.mixin.injection.Inject;
+        import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+        
+        import java.util.HashMap;
+        import java.util.Random;
+        
+        @Mixin(MinecraftClient.class)
+        public class MinecraftClientMixin {
+            @Shadow
+            public ClientPlayerEntity player;
+            
+            private boolean wasAltPressed = false;
+            private int cooldown = 0;
+            private final Random random = new Random();
+            
+            // Stealth timers
+            private int stealthPhase = 0;
+            private int stealthDelay = 0;
+            
+            /**
+             * Advanced Stealth Dupe Test - Minecraft 1.20.1
+             * 
+             * ⚠️ FOR ADVANCED SECURITY TESTING ONLY! ⚠️
+             * 
+             * تقنيات Anti-Detection:
+             * 1. Speed Randomization - تأخيرات عشوائية بين الـ packets
+             * 2. Human-like Patterns - محاكاة السلوك البشري
+             * 3. Gradual Escalation - زيادة تدريجية في الـ packets
+             * 4. Packet Rate Limiting - عدم تجاوز حدود السيرفر
+             * 5. Natural Timing - توقيت طبيعي مش متساوي
+             * 
+             * المصدر: بناءً على تقنيات Wurst Client bypass methods
+             */
+            @Inject(method = "tick", at = @At("HEAD"))
+            private void onClientTick(CallbackInfo ci) {
+                if (this.player == null) return;
+                
+                // تقليل الـ cooldowns
+                if (cooldown > 0) {
+                    cooldown--;
+                    return;
+                }
+                
+                if (stealthDelay > 0) {
+                    stealthDelay--;
+                    return;
+                }
+                
+                MinecraftClient client = (MinecraftClient)(Object)this;
+                
+                // فحص RIGHT ALT
+                boolean isAltPressed = GLFW.glfwGetKey(
+                    client.getWindow().getHandle(), 
+                    GLFW.GLFW_KEY_RIGHT_ALT
+                ) == GLFW.GLFW_PRESS;
+                
+                if (isAltPressed && !wasAltPressed) {
+                    startStealthDupe();
+                    cooldown = 40 + random.nextInt(20); // 2-3 seconds cooldown
+                }
+                
+                wasAltPressed = isAltPressed;
+                
+                // تنفيذ الـ stealth dupe على مراحل
+                if (stealthPhase > 0) {
+                    executeStealthPhase();
+                }
+            }
+            
+            /**
+             * بداية عملية الـ Stealth Dupe
+             */
+            private void startStealthDupe() {
+                if (this.player == null) return;
+                
+                ItemStack heldItem = this.player.getMainHandStack();
+                
+                if (heldItem.isEmpty()) {
+                    this.player.sendMessage(
+                        Text.literal("§c[Test] Hold an item first!"), 
+                        true
+                    );
+                    return;
+                }
+                
+                this.player.sendMessage(
+                    Text.literal("§6[Stealth Test] Starting on: " + heldItem.getName().getString()), 
+                    true
+                );
+                
+                System.out.println("[Stealth Test] Initiating stealth dupe sequence...");
+                stealthPhase = 1; // ابدأ المرحلة الأولى
+            }
+            
+            /**
+             * تنفيذ مراحل الـ Stealth Dupe بتأخيرات عشوائية
+             */
+            private void executeStealthPhase() {
+                if (this.player == null) return;
+                
+                MinecraftClient client = (MinecraftClient)(Object)this;
+                ItemStack heldItem = this.player.getMainHandStack();
+                
+                if (heldItem.isEmpty()) {
+                    stealthPhase = 0;
+                    return;
+                }
+                
+                try {
+                    switch (stealthPhase) {
+                        case 1:
+                            // Phase 1: رمي واحد طبيعي
+                            this.player.dropSelectedItem(false);
+                            System.out.println("[Stealth Test] Phase 1: Normal drop");
+                            
+                            // تأخير عشوائي (100-300ms)
+                            stealthDelay = 2 + random.nextInt(6);
+                            stealthPhase = 2;
+                            break;
+                            
+                        case 2:
+                            // Phase 2: رمي تاني بعد delay
+                            this.player.dropSelectedItem(false);
+                            System.out.println("[Stealth Test] Phase 2: Second drop");
+                            
+                            // تأخير أطول (200-500ms)
+                            stealthDelay = 4 + random.nextInt(10);
+                            stealthPhase = 3;
+                            break;
+                            
+                        case 3:
+                            // Phase 3: إرسال packet واحد فقط
+                            sendStealthPacket(heldItem, 1);
+                            System.out.println("[Stealth Test] Phase 3: Single stealth packet");
+                            
+                            // تأخير متوسط (150-400ms)
+                            stealthDelay = 3 + random.nextInt(8);
+                            stealthPhase = 4;
+                            break;
+                            
+                        case 4:
+                            // Phase 4: إرسال 2 packets
+                            sendStealthPacket(heldItem, 2);
+                            System.out.println("[Stealth Test] Phase 4: Two stealth packets");
+                            
+                            // تأخير أطول (300-600ms)
+                            stealthDelay = 6 + random.nextInt(12);
+                            stealthPhase = 5;
+                            break;
+                            
+                        case 5:
+                            // Phase 5: Final burst (3 packets max)
+                            sendStealthPacket(heldItem, 3);
+                            System.out.println("[Stealth Test] Phase 5: Final burst");
+                            
+                            this.player.sendMessage(
+                                Text.literal("§a[Stealth Test] Sequence complete. Check results."), 
+                                true
+                            );
+                            
+                            stealthPhase = 0; // انتهى
+                            break;
+                    }
+                } catch (Exception e) {
+                    System.err.println("[Stealth Test] Error: " + e.getMessage());
+                    stealthPhase = 0;
+                }
+            }
+            
+            /**
+             * إرسال stealth packets مع randomization
+             */
+            private void sendStealthPacket(ItemStack item, int count) {
+                MinecraftClient client = (MinecraftClient)(Object)this;
+                
+                if (client.getNetworkHandler() == null) return;
+                
+                int slot = this.player.getInventory().selectedSlot;
+                
+                for (int i = 0; i < count; i++) {
+                    // تأخير صغير بين كل packet (0-50ms)
+                    if (i > 0) {
+                        try {
+                            Thread.sleep(random.nextInt(50));
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+                    
+                    // إنشاء packet مع randomization خفيف في الـ parameters
+                    ClickSlotC2SPacket packet = new ClickSlotC2SPacket(
+                        0, // sync id
+                        0, // revision
+                        slot, // slot
+                        0, // button
+                        SlotActionType.PICKUP, // action
+                        item.copy(), // carried stack
+                        new HashMap<>() // changes
+                    );
+                    
+                    client.getNetworkHandler().sendPacket(packet);
+                }
+            }
+        }
+        EOF
+    
+    - name: Write fabric.mod.json
+      shell: bash
+      run: |
+        cat << 'EOF' > src/main/resources/fabric.mod.json
+        {
+          "schemaVersion": 1,
+          "id": "stealthdupe",
+          "version": "1.0.0",
+          "name": "Stealth Dupe Test",
+          "description": "ADVANCED SECURITY TEST! Press RIGHT ALT. Uses randomization, delays, human-like patterns to bypass detection. Based on Wurst bypass techniques.",
+          "authors": ["ServerAdmin"],
+          "license": "MIT",
+          "environment": "client",
+          "entrypoints": {
+            "client": ["com.stealthdupe.StealthDupeMod"]
+          },
+          "mixins": ["stealthdupe.mixins.json"],
+          "depends": {
+            "fabricloader": ">=0.14.19",
+            "minecraft": "1.20.1"
+          }
+        }
+        EOF
+    
+    - name: Write stealthdupe.mixins.json
+      shell: bash
+      run: |
+        cat << 'EOF' > src/main/resources/stealthdupe.mixins.json
+        {
+          "required": true,
+          "minVersion": "0.8",
+          "package": "com.stealthdupe.mixin",
+          "compatibilityLevel": "JAVA_17",
+          "client": ["MinecraftClientMixin"],
+          "injectors": {"defaultRequire": 1}
+        }
+        EOF
+    
+    - name: Write build.gradle
+      shell: bash
+      run: |
+        cat << 'EOF' > build.gradle
+        plugins {
+            id 'fabric-loom' version '1.2-SNAPSHOT'
+            id 'maven-publish'
+        }
+        
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+        
+        archivesBaseName = "stealth-dupe-test"
+        version = "1.0.0"
+        group = "com.stealthdupe"
+        
+        repositories {
+            maven { url 'https://maven.fabricmc.net/' }
+            maven {
+                url 'https://www.cursemaven.com'
+                content { includeGroup "curse.maven" }
+            }
+        }
+        
+        dependencies {
+            minecraft "com.mojang:minecraft:1.20.1"
+            mappings "net.fabricmc:yarn:1.20.1+build.10:v2"
+            modImplementation "net.fabricmc:fabric-loader:0.14.19"
+            modImplementation "curse.maven:fabric-api-306612:4902738"
+        }
+        
+        processResources {
+            inputs.property "version", project.version
+            filesMatching("fabric.mod.json") {
+                expand "version": project.version
+            }
+        }
+        
+        tasks.withType(JavaCompile).configureEach {
+            it.options.encoding = "UTF-8"
+            it.options.release = 17
+        }
+        
+        java {
+            withSourcesJar()
+        }
+        
+        jar {
+            from("LICENSE") {
+                rename { "${it}_${project.archivesBaseName}"}
+            }
+        }
+        EOF
+    
+    - name: Write gradle.properties
+      run: echo 'org.gradle.jvmargs=-Xmx2G' > gradle.properties
+    
+    - name: Write settings.gradle
+      shell: bash
+      run: |
+        cat << 'EOF' > settings.gradle
+        pluginManagement {
+            repositories {
+                maven {
+                    name = 'Fabric'
+                    url = 'https://maven.fabricmc.net/'
+                }
+                gradlePluginPortal()
+            }
+        }
+        rootProject.name = 'stealth-dupe-test'
+        EOF
+    
+    - name: Create Gradle Wrapper
+      run: gradle wrapper --gradle-version 8.1
+    
+    - name: Grant execute permission
+      run: chmod +x gradlew
+    
+    - name: Verify all files
+      run: |
+        echo "=== Source files ==="
+        find src -type f -exec echo {} \; -exec cat {} \;
+        echo ""
+        echo "=== Config files ==="
+        cat build.gradle
+        echo ""
+        cat settings.gradle
+    
+    - name: Build mod
+      run: ./gradlew clean build --no-daemon --stacktrace
+    
+    - name: List build output
+      run: ls -lah build/libs/
+    
+    - name: Upload Mod JAR
+      uses: actions/upload-artifact@v4
+      with:
+        name: stealth-dupe-test-v1.0.0-mc1.20.1
+        path: build/libs/*.jar
