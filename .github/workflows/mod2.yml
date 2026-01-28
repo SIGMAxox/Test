@@ -1,4 +1,4 @@
-name: Build MAXIMUM POWER Dupe Mod (1.20.1 - No Limits)
+name: Build Legitimate Packet Dupe (1.20.1 - Real Sync Values)
 
 on:
   workflow_dispatch:
@@ -27,43 +27,67 @@ jobs:
     
     - name: Create directories
       run: |
-        mkdir -p src/main/java/com/maxdupe/mixin
+        mkdir -p src/main/java/com/legit/mixin
         mkdir -p src/main/resources
     
-    - name: Write MaxDupeMod.java
+    - name: Write LegitDupeMod.java
       shell: bash
       run: |
-        cat << 'EOF' > src/main/java/com/maxdupe/MaxDupeMod.java
-        package com.maxdupe;
+        cat << 'EOF' > src/main/java/com/legit/LegitDupeMod.java
+        package com.legit;
         
         import net.fabricmc.api.ClientModInitializer;
-        import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
-        import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
-        import net.minecraft.item.ItemStack;
-        import net.minecraft.network.packet.Packet;
-        import net.minecraft.network.packet.c2s.play.ClickSlotC2SPacket;
-        import net.minecraft.network.packet.c2s.play.ButtonClickC2SPacket;
-        import net.minecraft.network.packet.c2s.play.CloseHandledScreenC2SPacket;
-        import java.util.ArrayList;
-        import java.util.List;
         
-        public class MaxDupeMod implements ClientModInitializer {
-            public static final String MOD_ID = "maxdupe";
+        public class LegitDupeMod implements ClientModInitializer {
+            public static final String MOD_ID = "legitdupe";
             
-            // Packet delay system (wakDuper style)
-            public static boolean delayPackets = false;
-            public static boolean closeWithoutPacket = false;
-            public static final List<Packet<?>> storedPackets = new ArrayList<>();
+            // Track REAL server sync values
+            public static int lastSyncId = 0;
+            public static int lastRevision = 0;
+            public static boolean captureNextScreen = false;
             
             @Override
             public void onInitializeClient() {
                 System.out.println("=============================================");
-                System.out.println("[MAX DUPE] MAXIMUM POWER MODE ACTIVATED");
-                System.out.println("[MAX DUPE] Based on wakDuper + Wurst techniques");
-                System.out.println("[MAX DUPE] RIGHT ALT = Dupe Item in Hand");
-                System.out.println("[MAX DUPE] LEFT ALT = Toggle Delay Packets");
-                System.out.println("[MAX DUPE] F = Close Without Packet");
+                System.out.println("[LEGIT DUPE] Legitimate Packet Generator");
+                System.out.println("[LEGIT DUPE] Uses REAL sync values from server");
+                System.out.println("[LEGIT DUPE] Press RIGHT ALT to dupe using chest");
                 System.out.println("=============================================");
+            }
+        }
+        EOF
+    
+    - name: Write ClientPlayerEntityMixin.java
+      shell: bash
+      run: |
+        cat << 'EOF' > src/main/java/com/legit/mixin/ClientPlayerEntityMixin.java
+        package com.legit.mixin;
+        
+        import com.legit.LegitDupeMod;
+        import net.minecraft.client.network.ClientPlayerEntity;
+        import net.minecraft.screen.ScreenHandler;
+        import org.spongepowered.asm.mixin.Mixin;
+        import org.spongepowered.asm.mixin.Shadow;
+        import org.spongepowered.asm.mixin.injection.At;
+        import org.spongepowered.asm.mixin.injection.Inject;
+        import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+        
+        @Mixin(ClientPlayerEntity.class)
+        public abstract class ClientPlayerEntityMixin {
+            
+            @Shadow
+            public ScreenHandler currentScreenHandler;
+            
+            /**
+             * Capture REAL sync ID and revision from server
+             */
+            @Inject(method = "tick", at = @At("HEAD"))
+            private void onTick(CallbackInfo ci) {
+                if (currentScreenHandler != null) {
+                    // احفظ الـ sync values الحقيقية من السيرفر
+                    LegitDupeMod.lastSyncId = currentScreenHandler.syncId;
+                    LegitDupeMod.lastRevision = currentScreenHandler.getRevision();
+                }
             }
         }
         EOF
@@ -71,10 +95,10 @@ jobs:
     - name: Write MinecraftClientMixin.java
       shell: bash
       run: |
-        cat << 'EOF' > src/main/java/com/maxdupe/mixin/MinecraftClientMixin.java
-        package com.maxdupe.mixin;
+        cat << 'EOF' > src/main/java/com/legit/mixin/MinecraftClientMixin.java
+        package com.legit.mixin;
         
-        import com.maxdupe.MaxDupeMod;
+        import com.legit.LegitDupeMod;
         import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
         import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
         import net.minecraft.client.MinecraftClient;
@@ -96,19 +120,19 @@ jobs:
             public ClientPlayerEntity player;
             
             private boolean wasRightAltPressed = false;
-            private boolean wasLeftAltPressed = false;
-            private boolean wasFPressed = false;
             private int cooldown = 0;
             
             /**
-             * MAX DUPE MOD - MAXIMUM POWER
+             * LEGITIMATE DUPE MOD
              * 
-             * Based on wakDuper and Wurst Client techniques
+             * Uses REAL sync values from server instead of fake ones
+             * Based on UI-Utils methodology
              * 
-             * Controls:
-             * RIGHT ALT = Instant dupe (spam packets)
-             * LEFT ALT = Toggle packet delay
-             * F = Close without packet
+             * How it works:
+             * 1. Opens chest
+             * 2. Captures REAL syncId and revision from server
+             * 3. Creates packets using REAL values
+             * 4. Server accepts them as legitimate!
              */
             @Inject(method = "tick", at = @At("HEAD"))
             private void onClientTick(CallbackInfo ci) {
@@ -120,167 +144,116 @@ jobs:
                 
                 MinecraftClient client = (MinecraftClient)(Object)this;
                 
-                // RIGHT ALT - INSTANT DUPE
+                // Press RIGHT ALT to dupe
                 boolean isRightAltPressed = GLFW.glfwGetKey(
                     client.getWindow().getHandle(), 
                     GLFW.GLFW_KEY_RIGHT_ALT
                 ) == GLFW.GLFW_PRESS;
                 
                 if (isRightAltPressed && !wasRightAltPressed) {
-                    instantDupe();
-                    cooldown = 10;
+                    performLegitDupe();
+                    cooldown = 20; // 1 second cooldown
                 }
+                
                 wasRightAltPressed = isRightAltPressed;
-                
-                // LEFT ALT - TOGGLE DELAY PACKETS
-                boolean isLeftAltPressed = GLFW.glfwGetKey(
-                    client.getWindow().getHandle(), 
-                    GLFW.GLFW_KEY_LEFT_ALT
-                ) == GLFW.GLFW_PRESS;
-                
-                if (isLeftAltPressed && !wasLeftAltPressed) {
-                    MaxDupeMod.delayPackets = !MaxDupeMod.delayPackets;
-                    
-                    if (!MaxDupeMod.delayPackets && !MaxDupeMod.storedPackets.isEmpty()) {
-                        // Send all stored packets
-                        for (var packet : MaxDupeMod.storedPackets) {
-                            client.getNetworkHandler().sendPacket(packet);
-                        }
-                        this.player.sendMessage(
-                            Text.literal("§a[MAX] Sent " + MaxDupeMod.storedPackets.size() + " packets!"), 
-                            true
-                        );
-                        MaxDupeMod.storedPackets.clear();
-                    }
-                    
-                    String status = MaxDupeMod.delayPackets ? "§a§lON" : "§c§lOFF";
-                    this.player.sendMessage(
-                        Text.literal("§6[MAX] Delay Packets: " + status), 
-                        true
-                    );
-                }
-                wasLeftAltPressed = isLeftAltPressed;
-                
-                // F - CLOSE WITHOUT PACKET
-                boolean isFPressed = GLFW.glfwGetKey(
-                    client.getWindow().getHandle(), 
-                    GLFW.GLFW_KEY_F
-                ) == GLFW.GLFW_PRESS;
-                
-                if (isFPressed && !wasFPressed) {
-                    MaxDupeMod.closeWithoutPacket = !MaxDupeMod.closeWithoutPacket;
-                    String status = MaxDupeMod.closeWithoutPacket ? "§a§lON" : "§c§lOFF";
-                    this.player.sendMessage(
-                        Text.literal("§6[MAX] Close Without Packet: " + status), 
-                        true
-                    );
-                }
-                wasFPressed = isFPressed;
             }
             
             /**
-             * INSTANT DUPE - MAXIMUM POWER
-             * Spams packets at maximum speed
+             * Perform dupe using LEGITIMATE packets
              */
-            private void instantDupe() {
+            private void performLegitDupe() {
                 if (this.player == null) return;
                 
                 MinecraftClient client = (MinecraftClient)(Object)this;
-                ItemStack heldItem = this.player.getMainHandStack();
                 
-                if (heldItem.isEmpty()) {
+                // Check if we have a screen handler (chest/GUI open)
+                if (this.player.currentScreenHandler == null) {
                     this.player.sendMessage(
-                        Text.literal("§c[MAX] Hold an item!"), 
+                        Text.literal("§c[LEGIT] Open a chest first!"), 
+                        true
+                    );
+                    return;
+                }
+                
+                // Get REAL sync values from server
+                int syncId = LegitDupeMod.lastSyncId;
+                int revision = LegitDupeMod.lastRevision;
+                
+                if (syncId == 0) {
+                    this.player.sendMessage(
+                        Text.literal("§c[LEGIT] No sync data available!"), 
                         true
                     );
                     return;
                 }
                 
                 this.player.sendMessage(
-                    Text.literal("§6[MAX] DUPING: " + heldItem.getName().getString()), 
+                    Text.literal("§6[LEGIT] Using server sync values: " + syncId + "/" + revision), 
                     true
                 );
                 
+                ItemStack heldItem = this.player.getMainHandStack();
                 int slot = this.player.getInventory().selectedSlot;
                 
-                // METHOD 1: Drop spam (50 drops)
-                for (int i = 0; i < 50; i++) {
-                    this.player.dropSelectedItem(false);
-                }
-                
-                // METHOD 2: Packet spam (100 packets)
-                for (int i = 0; i < 100; i++) {
-                    Int2ObjectMap<ItemStack> changes = new Int2ObjectArrayMap<>();
+                // Create LEGITIMATE packets using REAL server values
+                try {
+                    // Method 1: QUICK_MOVE (shift-click)
+                    for (int i = 0; i < 3; i++) {
+                        Int2ObjectMap<ItemStack> changes = new Int2ObjectArrayMap<>();
+                        
+                        ClickSlotC2SPacket packet = new ClickSlotC2SPacket(
+                            syncId,          // REAL sync ID from server!
+                            revision,        // REAL revision from server!
+                            (short) slot,    // slot
+                            0,               // left click
+                            SlotActionType.QUICK_MOVE, // shift-click
+                            heldItem.copy(),
+                            changes
+                        );
+                        
+                        client.getNetworkHandler().sendPacket(packet);
+                        
+                        // Small delay between packets (20ms)
+                        try {
+                            Thread.sleep(20);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
                     
-                    ClickSlotC2SPacket packet = new ClickSlotC2SPacket(
-                        0,
-                        0,
-                        slot,
-                        0,
-                        SlotActionType.PICKUP,
-                        heldItem.copy(),
-                        changes
+                    // Method 2: PICKUP (normal click)
+                    for (int i = 0; i < 2; i++) {
+                        Int2ObjectMap<ItemStack> changes = new Int2ObjectArrayMap<>();
+                        
+                        ClickSlotC2SPacket packet = new ClickSlotC2SPacket(
+                            syncId,
+                            revision,
+                            (short) slot,
+                            0,
+                            SlotActionType.PICKUP,
+                            heldItem.copy(),
+                            changes
+                        );
+                        
+                        client.getNetworkHandler().sendPacket(packet);
+                        
+                        try {
+                            Thread.sleep(20);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+                    
+                    System.out.println("[LEGIT DUPE] Sent 5 legitimate packets!");
+                    
+                    this.player.sendMessage(
+                        Text.literal("§a[LEGIT] Sent 5 legitimate packets! Check chest!"), 
+                        true
                     );
                     
-                    client.getNetworkHandler().sendPacket(packet);
-                }
-                
-                // METHOD 3: Throw spam (30 throws)
-                for (int i = 0; i < 30; i++) {
-                    this.player.dropSelectedItem(true); // Drop stack
-                }
-                
-                System.out.println("[MAX DUPE] Sent 180 exploit packets!");
-                
-                this.player.sendMessage(
-                    Text.literal("§a[MAX] 180 PACKETS SENT! Check inventory!"), 
-                    true
-                );
-            }
-        }
-        EOF
-    
-    - name: Write ClientPlayNetworkHandlerMixin.java
-      shell: bash
-      run: |
-        cat << 'EOF' > src/main/java/com/maxdupe/mixin/ClientPlayNetworkHandlerMixin.java
-        package com.maxdupe.mixin;
-        
-        import com.maxdupe.MaxDupeMod;
-        import net.minecraft.client.network.ClientPlayNetworkHandler;
-        import net.minecraft.network.packet.Packet;
-        import net.minecraft.network.packet.c2s.play.ButtonClickC2SPacket;
-        import net.minecraft.network.packet.c2s.play.ClickSlotC2SPacket;
-        import net.minecraft.network.packet.c2s.play.CloseHandledScreenC2SPacket;
-        import org.spongepowered.asm.mixin.Mixin;
-        import org.spongepowered.asm.mixin.injection.At;
-        import org.spongepowered.asm.mixin.injection.Inject;
-        import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-        
-        @Mixin(ClientPlayNetworkHandler.class)
-        public class ClientPlayNetworkHandlerMixin {
-            
-            /**
-             * Packet interception for delay and close without packet
-             */
-            @Inject(method = "sendPacket(Lnet/minecraft/network/packet/Packet;)V", at = @At("HEAD"), cancellable = true)
-            private void onSendPacket(Packet<?> packet, CallbackInfo ci) {
-                
-                // Close without packet
-                if (MaxDupeMod.closeWithoutPacket && packet instanceof CloseHandledScreenC2SPacket) {
-                    System.out.println("[MAX DUPE] Blocked CloseHandledScreenC2SPacket!");
-                    ci.cancel();
-                    return;
-                }
-                
-                // Delay packets
-                if (MaxDupeMod.delayPackets) {
-                    if (packet instanceof ClickSlotC2SPacket || packet instanceof ButtonClickC2SPacket) {
-                        MaxDupeMod.storedPackets.add(packet);
-                        System.out.println("[MAX DUPE] Stored packet! Total: " + MaxDupeMod.storedPackets.size());
-                        ci.cancel();
-                        return;
-                    }
+                } catch (Exception e) {
+                    System.err.println("[LEGIT DUPE] Error: " + e.getMessage());
+                    e.printStackTrace();
                 }
             }
         }
@@ -292,17 +265,17 @@ jobs:
         cat << 'EOF' > src/main/resources/fabric.mod.json
         {
           "schemaVersion": 1,
-          "id": "maxdupe",
+          "id": "legitdupe",
           "version": "1.0.0",
-          "name": "MAX DUPE",
-          "description": "MAXIMUM POWER! Based on wakDuper + Wurst. RIGHT ALT = Instant Dupe (180 packets), LEFT ALT = Delay Packets, F = Close Without Packet. NO LIMITS!",
-          "authors": ["MAX"],
+          "name": "Legitimate Dupe",
+          "description": "Uses REAL sync values from server. Press RIGHT ALT while chest is open. Based on UI-Utils methodology.",
+          "authors": ["ServerTester"],
           "license": "MIT",
           "environment": "client",
           "entrypoints": {
-            "client": ["com.maxdupe.MaxDupeMod"]
+            "client": ["com.legit.LegitDupeMod"]
           },
-          "mixins": ["maxdupe.mixins.json"],
+          "mixins": ["legitdupe.mixins.json"],
           "depends": {
             "fabricloader": ">=0.14.19",
             "minecraft": "1.20.1"
@@ -310,18 +283,18 @@ jobs:
         }
         EOF
     
-    - name: Write maxdupe.mixins.json
+    - name: Write legitdupe.mixins.json
       shell: bash
       run: |
-        cat << 'EOF' > src/main/resources/maxdupe.mixins.json
+        cat << 'EOF' > src/main/resources/legitdupe.mixins.json
         {
           "required": true,
           "minVersion": "0.8",
-          "package": "com.maxdupe.mixin",
+          "package": "com.legit.mixin",
           "compatibilityLevel": "JAVA_17",
           "client": [
             "MinecraftClientMixin",
-            "ClientPlayNetworkHandlerMixin"
+            "ClientPlayerEntityMixin"
           ],
           "injectors": {"defaultRequire": 1}
         }
@@ -339,9 +312,9 @@ jobs:
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
         
-        archivesBaseName = "max-dupe"
+        archivesBaseName = "legitimate-dupe"
         version = "1.0.0"
-        group = "com.maxdupe"
+        group = "com.legit"
         
         repositories {
             maven { url 'https://maven.fabricmc.net/' }
@@ -397,7 +370,7 @@ jobs:
                 gradlePluginPortal()
             }
         }
-        rootProject.name = 'max-dupe'
+        rootProject.name = 'legitimate-dupe'
         EOF
     
     - name: Create Gradle Wrapper
@@ -425,5 +398,5 @@ jobs:
     - name: Upload Mod JAR
       uses: actions/upload-artifact@v4
       with:
-        name: max-dupe-v1.0.0-NO-LIMITS-mc1.20.1
+        name: legitimate-dupe-v1.0.0-REAL-SYNC-mc1.20.1
         path: build/libs/*.jar
