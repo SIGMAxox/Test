@@ -1,4 +1,4 @@
-name: Build Advanced Stealth Dupe Test (1.20.1 - Anti-Detection)
+name: Build MAXIMUM POWER Dupe Mod (1.20.1 - No Limits)
 
 on:
   workflow_dispatch:
@@ -27,27 +27,42 @@ jobs:
     
     - name: Create directories
       run: |
-        mkdir -p src/main/java/com/stealthdupe/mixin
+        mkdir -p src/main/java/com/maxdupe/mixin
         mkdir -p src/main/resources
     
-    - name: Write StealthDupeMod.java
+    - name: Write MaxDupeMod.java
       shell: bash
       run: |
-        cat << 'EOF' > src/main/java/com/stealthdupe/StealthDupeMod.java
-        package com.stealthdupe;
+        cat << 'EOF' > src/main/java/com/maxdupe/MaxDupeMod.java
+        package com.maxdupe;
         
         import net.fabricmc.api.ClientModInitializer;
+        import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+        import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
+        import net.minecraft.item.ItemStack;
+        import net.minecraft.network.packet.Packet;
+        import net.minecraft.network.packet.c2s.play.ClickSlotC2SPacket;
+        import net.minecraft.network.packet.c2s.play.ButtonClickC2SPacket;
+        import net.minecraft.network.packet.c2s.play.CloseHandledScreenC2SPacket;
+        import java.util.ArrayList;
+        import java.util.List;
         
-        public class StealthDupeMod implements ClientModInitializer {
-            public static final String MOD_ID = "stealthdupe";
+        public class MaxDupeMod implements ClientModInitializer {
+            public static final String MOD_ID = "maxdupe";
+            
+            // Packet delay system (wakDuper style)
+            public static boolean delayPackets = false;
+            public static boolean closeWithoutPacket = false;
+            public static final List<Packet<?>> storedPackets = new ArrayList<>();
             
             @Override
             public void onInitializeClient() {
                 System.out.println("=============================================");
-                System.out.println("[Stealth Test] ADVANCED ANTI-CHEAT TEST");
-                System.out.println("[Stealth Test] FOR SECURITY TESTING ONLY!");
-                System.out.println("[Stealth Test] Press RIGHT ALT for stealth dupe");
-                System.out.println("[Stealth Test] Uses: Randomization, Delays, Human-like patterns");
+                System.out.println("[MAX DUPE] MAXIMUM POWER MODE ACTIVATED");
+                System.out.println("[MAX DUPE] Based on wakDuper + Wurst techniques");
+                System.out.println("[MAX DUPE] RIGHT ALT = Dupe Item in Hand");
+                System.out.println("[MAX DUPE] LEFT ALT = Toggle Delay Packets");
+                System.out.println("[MAX DUPE] F = Close Without Packet");
                 System.out.println("=============================================");
             }
         }
@@ -56,9 +71,10 @@ jobs:
     - name: Write MinecraftClientMixin.java
       shell: bash
       run: |
-        cat << 'EOF' > src/main/java/com/stealthdupe/mixin/MinecraftClientMixin.java
-        package com.stealthdupe.mixin;
+        cat << 'EOF' > src/main/java/com/maxdupe/mixin/MinecraftClientMixin.java
+        package com.maxdupe.mixin;
         
+        import com.maxdupe.MaxDupeMod;
         import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
         import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
         import net.minecraft.client.MinecraftClient;
@@ -74,205 +90,197 @@ jobs:
         import org.spongepowered.asm.mixin.injection.Inject;
         import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
         
-        import java.util.Random;
-        
         @Mixin(MinecraftClient.class)
         public class MinecraftClientMixin {
             @Shadow
             public ClientPlayerEntity player;
             
-            private boolean wasAltPressed = false;
+            private boolean wasRightAltPressed = false;
+            private boolean wasLeftAltPressed = false;
+            private boolean wasFPressed = false;
             private int cooldown = 0;
-            private final Random random = new Random();
-            
-            // Stealth timers
-            private int stealthPhase = 0;
-            private int stealthDelay = 0;
             
             /**
-             * Advanced Stealth Dupe Test - Minecraft 1.20.1
+             * MAX DUPE MOD - MAXIMUM POWER
              * 
-             * ⚠️ FOR ADVANCED SECURITY TESTING ONLY! ⚠️
+             * Based on wakDuper and Wurst Client techniques
              * 
-             * تقنيات Anti-Detection:
-             * 1. Speed Randomization - تأخيرات عشوائية بين الـ packets
-             * 2. Human-like Patterns - محاكاة السلوك البشري
-             * 3. Gradual Escalation - زيادة تدريجية في الـ packets
-             * 4. Packet Rate Limiting - عدم تجاوز حدود السيرفر
-             * 5. Natural Timing - توقيت طبيعي مش متساوي
-             * 
-             * المصدر: بناءً على تقنيات Wurst Client bypass methods
+             * Controls:
+             * RIGHT ALT = Instant dupe (spam packets)
+             * LEFT ALT = Toggle packet delay
+             * F = Close without packet
              */
             @Inject(method = "tick", at = @At("HEAD"))
             private void onClientTick(CallbackInfo ci) {
                 if (this.player == null) return;
-                
-                // تقليل الـ cooldowns
                 if (cooldown > 0) {
                     cooldown--;
                     return;
                 }
                 
-                if (stealthDelay > 0) {
-                    stealthDelay--;
-                    return;
-                }
-                
                 MinecraftClient client = (MinecraftClient)(Object)this;
                 
-                // فحص RIGHT ALT
-                boolean isAltPressed = GLFW.glfwGetKey(
+                // RIGHT ALT - INSTANT DUPE
+                boolean isRightAltPressed = GLFW.glfwGetKey(
                     client.getWindow().getHandle(), 
                     GLFW.GLFW_KEY_RIGHT_ALT
                 ) == GLFW.GLFW_PRESS;
                 
-                if (isAltPressed && !wasAltPressed) {
-                    startStealthDupe();
-                    cooldown = 40 + random.nextInt(20); // 2-3 seconds cooldown
+                if (isRightAltPressed && !wasRightAltPressed) {
+                    instantDupe();
+                    cooldown = 10;
                 }
+                wasRightAltPressed = isRightAltPressed;
                 
-                wasAltPressed = isAltPressed;
+                // LEFT ALT - TOGGLE DELAY PACKETS
+                boolean isLeftAltPressed = GLFW.glfwGetKey(
+                    client.getWindow().getHandle(), 
+                    GLFW.GLFW_KEY_LEFT_ALT
+                ) == GLFW.GLFW_PRESS;
                 
-                // تنفيذ الـ stealth dupe على مراحل
-                if (stealthPhase > 0) {
-                    executeStealthPhase();
+                if (isLeftAltPressed && !wasLeftAltPressed) {
+                    MaxDupeMod.delayPackets = !MaxDupeMod.delayPackets;
+                    
+                    if (!MaxDupeMod.delayPackets && !MaxDupeMod.storedPackets.isEmpty()) {
+                        // Send all stored packets
+                        for (var packet : MaxDupeMod.storedPackets) {
+                            client.getNetworkHandler().sendPacket(packet);
+                        }
+                        this.player.sendMessage(
+                            Text.literal("§a[MAX] Sent " + MaxDupeMod.storedPackets.size() + " packets!"), 
+                            true
+                        );
+                        MaxDupeMod.storedPackets.clear();
+                    }
+                    
+                    String status = MaxDupeMod.delayPackets ? "§a§lON" : "§c§lOFF";
+                    this.player.sendMessage(
+                        Text.literal("§6[MAX] Delay Packets: " + status), 
+                        true
+                    );
                 }
+                wasLeftAltPressed = isLeftAltPressed;
+                
+                // F - CLOSE WITHOUT PACKET
+                boolean isFPressed = GLFW.glfwGetKey(
+                    client.getWindow().getHandle(), 
+                    GLFW.GLFW_KEY_F
+                ) == GLFW.GLFW_PRESS;
+                
+                if (isFPressed && !wasFPressed) {
+                    MaxDupeMod.closeWithoutPacket = !MaxDupeMod.closeWithoutPacket;
+                    String status = MaxDupeMod.closeWithoutPacket ? "§a§lON" : "§c§lOFF";
+                    this.player.sendMessage(
+                        Text.literal("§6[MAX] Close Without Packet: " + status), 
+                        true
+                    );
+                }
+                wasFPressed = isFPressed;
             }
             
             /**
-             * بداية عملية الـ Stealth Dupe
+             * INSTANT DUPE - MAXIMUM POWER
+             * Spams packets at maximum speed
              */
-            private void startStealthDupe() {
+            private void instantDupe() {
                 if (this.player == null) return;
                 
+                MinecraftClient client = (MinecraftClient)(Object)this;
                 ItemStack heldItem = this.player.getMainHandStack();
                 
                 if (heldItem.isEmpty()) {
                     this.player.sendMessage(
-                        Text.literal("§c[Test] Hold an item first!"), 
+                        Text.literal("§c[MAX] Hold an item!"), 
                         true
                     );
                     return;
                 }
                 
                 this.player.sendMessage(
-                    Text.literal("§6[Stealth Test] Starting on: " + heldItem.getName().getString()), 
+                    Text.literal("§6[MAX] DUPING: " + heldItem.getName().getString()), 
                     true
                 );
                 
-                System.out.println("[Stealth Test] Initiating stealth dupe sequence...");
-                stealthPhase = 1; // ابدأ المرحلة الأولى
-            }
-            
-            /**
-             * تنفيذ مراحل الـ Stealth Dupe بتأخيرات عشوائية
-             */
-            private void executeStealthPhase() {
-                if (this.player == null) return;
-                
-                MinecraftClient client = (MinecraftClient)(Object)this;
-                ItemStack heldItem = this.player.getMainHandStack();
-                
-                if (heldItem.isEmpty()) {
-                    stealthPhase = 0;
-                    return;
-                }
-                
-                try {
-                    switch (stealthPhase) {
-                        case 1:
-                            // Phase 1: رمي واحد طبيعي
-                            this.player.dropSelectedItem(false);
-                            System.out.println("[Stealth Test] Phase 1: Normal drop");
-                            
-                            // تأخير عشوائي (100-300ms)
-                            stealthDelay = 2 + random.nextInt(6);
-                            stealthPhase = 2;
-                            break;
-                            
-                        case 2:
-                            // Phase 2: رمي تاني بعد delay
-                            this.player.dropSelectedItem(false);
-                            System.out.println("[Stealth Test] Phase 2: Second drop");
-                            
-                            // تأخير أطول (200-500ms)
-                            stealthDelay = 4 + random.nextInt(10);
-                            stealthPhase = 3;
-                            break;
-                            
-                        case 3:
-                            // Phase 3: إرسال packet واحد فقط
-                            sendStealthPacket(heldItem, 1);
-                            System.out.println("[Stealth Test] Phase 3: Single stealth packet");
-                            
-                            // تأخير متوسط (150-400ms)
-                            stealthDelay = 3 + random.nextInt(8);
-                            stealthPhase = 4;
-                            break;
-                            
-                        case 4:
-                            // Phase 4: إرسال 2 packets
-                            sendStealthPacket(heldItem, 2);
-                            System.out.println("[Stealth Test] Phase 4: Two stealth packets");
-                            
-                            // تأخير أطول (300-600ms)
-                            stealthDelay = 6 + random.nextInt(12);
-                            stealthPhase = 5;
-                            break;
-                            
-                        case 5:
-                            // Phase 5: Final burst (3 packets max)
-                            sendStealthPacket(heldItem, 3);
-                            System.out.println("[Stealth Test] Phase 5: Final burst");
-                            
-                            this.player.sendMessage(
-                                Text.literal("§a[Stealth Test] Sequence complete. Check results."), 
-                                true
-                            );
-                            
-                            stealthPhase = 0; // انتهى
-                            break;
-                    }
-                } catch (Exception e) {
-                    System.err.println("[Stealth Test] Error: " + e.getMessage());
-                    stealthPhase = 0;
-                }
-            }
-            
-            /**
-             * إرسال stealth packets مع randomization
-             */
-            private void sendStealthPacket(ItemStack item, int count) {
-                MinecraftClient client = (MinecraftClient)(Object)this;
-                
-                if (client.getNetworkHandler() == null) return;
-                
                 int slot = this.player.getInventory().selectedSlot;
                 
-                for (int i = 0; i < count; i++) {
-                    // تأخير صغير بين كل packet (0-50ms)
-                    if (i > 0) {
-                        try {
-                            Thread.sleep(random.nextInt(50));
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
-                    }
-                    
-                    // إنشاء packet مع randomization خفيف في الـ parameters
+                // METHOD 1: Drop spam (50 drops)
+                for (int i = 0; i < 50; i++) {
+                    this.player.dropSelectedItem(false);
+                }
+                
+                // METHOD 2: Packet spam (100 packets)
+                for (int i = 0; i < 100; i++) {
                     Int2ObjectMap<ItemStack> changes = new Int2ObjectArrayMap<>();
                     
                     ClickSlotC2SPacket packet = new ClickSlotC2SPacket(
-                        0, // sync id
-                        0, // revision
-                        slot, // slot
-                        0, // button
-                        SlotActionType.PICKUP, // action
-                        item.copy(), // carried stack
-                        changes // changes - Int2ObjectMap
+                        0,
+                        0,
+                        slot,
+                        0,
+                        SlotActionType.PICKUP,
+                        heldItem.copy(),
+                        changes
                     );
                     
                     client.getNetworkHandler().sendPacket(packet);
+                }
+                
+                // METHOD 3: Throw spam (30 throws)
+                for (int i = 0; i < 30; i++) {
+                    this.player.dropSelectedItem(true); // Drop stack
+                }
+                
+                System.out.println("[MAX DUPE] Sent 180 exploit packets!");
+                
+                this.player.sendMessage(
+                    Text.literal("§a[MAX] 180 PACKETS SENT! Check inventory!"), 
+                    true
+                );
+            }
+        }
+        EOF
+    
+    - name: Write ClientPlayNetworkHandlerMixin.java
+      shell: bash
+      run: |
+        cat << 'EOF' > src/main/java/com/maxdupe/mixin/ClientPlayNetworkHandlerMixin.java
+        package com.maxdupe.mixin;
+        
+        import com.maxdupe.MaxDupeMod;
+        import net.minecraft.client.network.ClientPlayNetworkHandler;
+        import net.minecraft.network.packet.Packet;
+        import net.minecraft.network.packet.c2s.play.ButtonClickC2SPacket;
+        import net.minecraft.network.packet.c2s.play.ClickSlotC2SPacket;
+        import net.minecraft.network.packet.c2s.play.CloseHandledScreenC2SPacket;
+        import org.spongepowered.asm.mixin.Mixin;
+        import org.spongepowered.asm.mixin.injection.At;
+        import org.spongepowered.asm.mixin.injection.Inject;
+        import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+        
+        @Mixin(ClientPlayNetworkHandler.class)
+        public class ClientPlayNetworkHandlerMixin {
+            
+            /**
+             * Packet interception for delay and close without packet
+             */
+            @Inject(method = "sendPacket(Lnet/minecraft/network/packet/Packet;)V", at = @At("HEAD"), cancellable = true)
+            private void onSendPacket(Packet<?> packet, CallbackInfo ci) {
+                
+                // Close without packet
+                if (MaxDupeMod.closeWithoutPacket && packet instanceof CloseHandledScreenC2SPacket) {
+                    System.out.println("[MAX DUPE] Blocked CloseHandledScreenC2SPacket!");
+                    ci.cancel();
+                    return;
+                }
+                
+                // Delay packets
+                if (MaxDupeMod.delayPackets) {
+                    if (packet instanceof ClickSlotC2SPacket || packet instanceof ButtonClickC2SPacket) {
+                        MaxDupeMod.storedPackets.add(packet);
+                        System.out.println("[MAX DUPE] Stored packet! Total: " + MaxDupeMod.storedPackets.size());
+                        ci.cancel();
+                        return;
+                    }
                 }
             }
         }
@@ -284,17 +292,17 @@ jobs:
         cat << 'EOF' > src/main/resources/fabric.mod.json
         {
           "schemaVersion": 1,
-          "id": "stealthdupe",
+          "id": "maxdupe",
           "version": "1.0.0",
-          "name": "Stealth Dupe Test",
-          "description": "ADVANCED SECURITY TEST! Press RIGHT ALT. Uses randomization, delays, human-like patterns to bypass detection. Based on Wurst bypass techniques.",
-          "authors": ["ServerAdmin"],
+          "name": "MAX DUPE",
+          "description": "MAXIMUM POWER! Based on wakDuper + Wurst. RIGHT ALT = Instant Dupe (180 packets), LEFT ALT = Delay Packets, F = Close Without Packet. NO LIMITS!",
+          "authors": ["MAX"],
           "license": "MIT",
           "environment": "client",
           "entrypoints": {
-            "client": ["com.stealthdupe.StealthDupeMod"]
+            "client": ["com.maxdupe.MaxDupeMod"]
           },
-          "mixins": ["stealthdupe.mixins.json"],
+          "mixins": ["maxdupe.mixins.json"],
           "depends": {
             "fabricloader": ">=0.14.19",
             "minecraft": "1.20.1"
@@ -302,16 +310,19 @@ jobs:
         }
         EOF
     
-    - name: Write stealthdupe.mixins.json
+    - name: Write maxdupe.mixins.json
       shell: bash
       run: |
-        cat << 'EOF' > src/main/resources/stealthdupe.mixins.json
+        cat << 'EOF' > src/main/resources/maxdupe.mixins.json
         {
           "required": true,
           "minVersion": "0.8",
-          "package": "com.stealthdupe.mixin",
+          "package": "com.maxdupe.mixin",
           "compatibilityLevel": "JAVA_17",
-          "client": ["MinecraftClientMixin"],
+          "client": [
+            "MinecraftClientMixin",
+            "ClientPlayNetworkHandlerMixin"
+          ],
           "injectors": {"defaultRequire": 1}
         }
         EOF
@@ -328,9 +339,9 @@ jobs:
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
         
-        archivesBaseName = "stealth-dupe-test"
+        archivesBaseName = "max-dupe"
         version = "1.0.0"
-        group = "com.stealthdupe"
+        group = "com.maxdupe"
         
         repositories {
             maven { url 'https://maven.fabricmc.net/' }
@@ -386,7 +397,7 @@ jobs:
                 gradlePluginPortal()
             }
         }
-        rootProject.name = 'stealth-dupe-test'
+        rootProject.name = 'max-dupe'
         EOF
     
     - name: Create Gradle Wrapper
@@ -414,5 +425,5 @@ jobs:
     - name: Upload Mod JAR
       uses: actions/upload-artifact@v4
       with:
-        name: stealth-dupe-test-v1.0.0-mc1.20.1
+        name: max-dupe-v1.0.0-NO-LIMITS-mc1.20.1
         path: build/libs/*.jar
