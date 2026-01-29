@@ -57,41 +57,6 @@ jobs:
         }
         EOF
     
-    - name: Write ClientPlayerEntityMixin.java
-      shell: bash
-      run: |
-        cat << 'EOF' > src/main/java/com/legit/mixin/ClientPlayerEntityMixin.java
-        package com.legit.mixin;
-        
-        import com.legit.LegitDupeMod;
-        import net.minecraft.client.network.ClientPlayerEntity;
-        import net.minecraft.screen.ScreenHandler;
-        import org.spongepowered.asm.mixin.Mixin;
-        import org.spongepowered.asm.mixin.Shadow;
-        import org.spongepowered.asm.mixin.injection.At;
-        import org.spongepowered.asm.mixin.injection.Inject;
-        import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-        
-        @Mixin(ClientPlayerEntity.class)
-        public abstract class ClientPlayerEntityMixin {
-            
-            @Shadow
-            public ScreenHandler currentScreenHandler;
-            
-            /**
-             * Capture REAL sync ID and revision from server
-             */
-            @Inject(method = "tick", at = @At("HEAD"))
-            private void onTick(CallbackInfo ci) {
-                if (currentScreenHandler != null) {
-                    // احفظ الـ sync values الحقيقية من السيرفر
-                    LegitDupeMod.lastSyncId = currentScreenHandler.syncId;
-                    LegitDupeMod.lastRevision = currentScreenHandler.getRevision();
-                }
-            }
-        }
-        EOF
-    
     - name: Write MinecraftClientMixin.java
       shell: bash
       run: |
@@ -105,6 +70,7 @@ jobs:
         import net.minecraft.client.network.ClientPlayerEntity;
         import net.minecraft.item.ItemStack;
         import net.minecraft.network.packet.c2s.play.ClickSlotC2SPacket;
+        import net.minecraft.screen.ScreenHandler;
         import net.minecraft.screen.slot.SlotActionType;
         import net.minecraft.text.Text;
         import org.lwjgl.glfw.GLFW;
@@ -122,24 +88,19 @@ jobs:
             private boolean wasRightAltPressed = false;
             private int cooldown = 0;
             
-            /**
-             * LEGITIMATE DUPE MOD
-             * 
-             * Uses REAL sync values from server instead of fake ones
-             * Based on UI-Utils methodology
-             * 
-             * How it works:
-             * 1. Opens chest
-             * 2. Captures REAL syncId and revision from server
-             * 3. Creates packets using REAL values
-             * 4. Server accepts them as legitimate!
-             */
             @Inject(method = "tick", at = @At("HEAD"))
             private void onClientTick(CallbackInfo ci) {
                 if (this.player == null) return;
                 if (cooldown > 0) {
                     cooldown--;
                     return;
+                }
+                
+                // Capture sync values every tick
+                ScreenHandler handler = this.player.currentScreenHandler;
+                if (handler != null) {
+                    LegitDupeMod.lastSyncId = handler.syncId;
+                    LegitDupeMod.lastRevision = handler.getRevision();
                 }
                 
                 MinecraftClient client = (MinecraftClient)(Object)this;
@@ -152,21 +113,17 @@ jobs:
                 
                 if (isRightAltPressed && !wasRightAltPressed) {
                     performLegitDupe();
-                    cooldown = 20; // 1 second cooldown
+                    cooldown = 20;
                 }
                 
                 wasRightAltPressed = isRightAltPressed;
             }
             
-            /**
-             * Perform dupe using LEGITIMATE packets
-             */
             private void performLegitDupe() {
                 if (this.player == null) return;
                 
                 MinecraftClient client = (MinecraftClient)(Object)this;
                 
-                // Check if we have a screen handler (chest/GUI open)
                 if (this.player.currentScreenHandler == null) {
                     this.player.sendMessage(
                         Text.literal("§c[LEGIT] Open a chest first!"), 
@@ -175,84 +132,50 @@ jobs:
                     return;
                 }
                 
-                // Get REAL sync values from server
                 int syncId = LegitDupeMod.lastSyncId;
                 int revision = LegitDupeMod.lastRevision;
                 
                 if (syncId == 0) {
                     this.player.sendMessage(
-                        Text.literal("§c[LEGIT] No sync data available!"), 
+                        Text.literal("§c[LEGIT] No sync data!"), 
                         true
                     );
                     return;
                 }
                 
                 this.player.sendMessage(
-                    Text.literal("§6[LEGIT] Using server sync values: " + syncId + "/" + revision), 
+                    Text.literal("§6[LEGIT] Sync: " + syncId + "/" + revision), 
                     true
                 );
                 
                 ItemStack heldItem = this.player.getMainHandStack();
-                int slot = this.player.getInventory().selectedSlot;
+                int slot = this.player.getInventory().selectedSlot + 36;
                 
-                // Create LEGITIMATE packets using REAL server values
                 try {
-                    // Method 1: QUICK_MOVE (shift-click)
-                    for (int i = 0; i < 3; i++) {
-                        Int2ObjectMap<ItemStack> changes = new Int2ObjectArrayMap<>();
-                        
-                        ClickSlotC2SPacket packet = new ClickSlotC2SPacket(
-                            syncId,          // REAL sync ID from server!
-                            revision,        // REAL revision from server!
-                            (short) slot,    // slot
-                            0,               // left click
-                            SlotActionType.QUICK_MOVE, // shift-click
-                            heldItem.copy(),
-                            changes
-                        );
-                        
-                        client.getNetworkHandler().sendPacket(packet);
-                        
-                        // Small delay between packets (20ms)
-                        try {
-                            Thread.sleep(20);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
-                    }
-                    
-                    // Method 2: PICKUP (normal click)
-                    for (int i = 0; i < 2; i++) {
+                    for (int i = 0; i < 5; i++) {
                         Int2ObjectMap<ItemStack> changes = new Int2ObjectArrayMap<>();
                         
                         ClickSlotC2SPacket packet = new ClickSlotC2SPacket(
                             syncId,
                             revision,
-                            (short) slot,
+                            slot,
                             0,
-                            SlotActionType.PICKUP,
+                            SlotActionType.QUICK_MOVE,
                             heldItem.copy(),
                             changes
                         );
                         
                         client.getNetworkHandler().sendPacket(packet);
                         
-                        try {
-                            Thread.sleep(20);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
+                        Thread.sleep(50);
                     }
                     
-                    System.out.println("[LEGIT DUPE] Sent 5 legitimate packets!");
-                    
                     this.player.sendMessage(
-                        Text.literal("§a[LEGIT] Sent 5 legitimate packets! Check chest!"), 
+                        Text.literal("§a[LEGIT] Sent 5 packets!"), 
                         true
                     );
                     
                 } catch (Exception e) {
-                    System.err.println("[LEGIT DUPE] Error: " + e.getMessage());
                     e.printStackTrace();
                 }
             }
@@ -292,10 +215,7 @@ jobs:
           "minVersion": "0.8",
           "package": "com.legit.mixin",
           "compatibilityLevel": "JAVA_17",
-          "client": [
-            "MinecraftClientMixin",
-            "ClientPlayerEntityMixin"
-          ],
+          "client": ["MinecraftClientMixin"],
           "injectors": {"defaultRequire": 1}
         }
         EOF
