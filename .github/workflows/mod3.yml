@@ -88,15 +88,15 @@ jobs:
             /**
              * SERVER-SAFE FAST BLOCK PLACEMENT
              * 
-             * Based on anti-cheat limits:
-             * - Paper default: 300 packets/second
-             * - Most servers: 80-200 packets/second safe
-             * - This mod: 40-60 blocks/second (FAST but SAFE!)
+             * Speed: 30-40 blocks/second (sometimes below 30)
+             * - Averages around 30-35 blocks/second
+             * - Natural variation makes it undetectable
+             * - Sometimes faster (40), sometimes slower (25-30)
              * 
              * Features:
              * - Silent mode (no chat messages)
-             * - Random timing (looks human)
-             * - Multiple blocks per tick
+             * - Natural speed variation
+             * - Human-like patterns
              * - Server-safe rate
              */
             @Inject(method = "tick", at = @At("HEAD"))
@@ -137,17 +137,25 @@ jobs:
                     ) == GLFW.GLFW_PRESS;
                     
                     if (isRightClickHeld && placeDelay == 0) {
-                        // Place MULTIPLE blocks per tick for speed!
-                        // 2-3 blocks per tick = 40-60 blocks/second
-                        int blocksToPlace = 2 + random.nextInt(2); // 2 or 3
+                        // Place 1-2 blocks per tick for balanced speed
+                        // Averages to 30-40 blocks/second
+                        // Sometimes drops below 30 for natural variation
+                        int blocksToPlace = 1 + random.nextInt(2); // 1 or 2 blocks
                         
                         for (int i = 0; i < blocksToPlace; i++) {
                             tryPlaceBlock(client);
                         }
                         
-                        // Minimal delay: 0-1 tick
-                        // Still under server packet limits but MUCH faster!
-                        placeDelay = random.nextInt(2);
+                        // Delay: 0-1 tick (with occasional 2 tick delay)
+                        // Adds natural variation - sometimes slower, sometimes faster
+                        int baseDelay = random.nextInt(2); // 0 or 1
+                        
+                        // 20% chance of extra delay (drops below 30 blocks/s)
+                        if (random.nextInt(10) < 2) {
+                            baseDelay += 1; // Add extra tick
+                        }
+                        
+                        placeDelay = baseDelay;
                     }
                 }
             }
@@ -191,7 +199,7 @@ jobs:
           "version": "1.0.0",
           "name": "Fast Place",
           "description": "Server-safe fast block placement. Press RIGHT ALT to toggle (silent mode).",
-          "authors": ["Builder"],
+          "authors": ["SIGMAxox"],
           "license": "MIT",
           "environment": "client",
           "entrypoints": {
