@@ -163,7 +163,7 @@ jobs:
             }
             
             /**
-             * Try to place a block
+             * Try to place a block (WITHOUT excessive hand swinging)
              */
             private void tryPlaceBlock(MinecraftClient client) {
                 if (this.player == null) return;
@@ -174,15 +174,19 @@ jobs:
                 try {
                     BlockHitResult blockHit = (BlockHitResult) this.crosshairTarget;
                     
-                    // Place the block
+                    // Place the block WITHOUT swinging hand every time!
+                    // This makes it look like vanilla (smooth placement)
                     client.interactionManager.interactBlock(
                         this.player,
                         Hand.MAIN_HAND,
                         blockHit
                     );
                     
-                    // Swing hand (looks natural)
-                    this.player.swingHand(Hand.MAIN_HAND);
+                    // Only swing hand occasionally (10% of time)
+                    // This makes it look natural without spam
+                    if (random.nextInt(10) == 0) {
+                        this.player.swingHand(Hand.MAIN_HAND);
+                    }
                     
                 } catch (Exception e) {
                     // Silent fail
