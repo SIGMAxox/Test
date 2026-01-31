@@ -1,4 +1,4 @@
-name: Build Server-Safe Fast Place (1.20.1 - Stealth Mode)
+name: Build Auto-Repeat Fast Place (1.20.1 - Hold to Place 30-40 CPS)
 
 on:
   workflow_dispatch:
@@ -27,24 +27,24 @@ jobs:
     
     - name: Create directories
       run: |
-        mkdir -p src/main/java/com/fastplace/mixin
+        mkdir -p src/main/java/com/autorepeat/mixin
         mkdir -p src/main/resources
     
-    - name: Write FastPlaceMod.java
+    - name: Write AutoRepeatMod.java
       shell: bash
       run: |
-        cat << 'EOF' > src/main/java/com/fastplace/FastPlaceMod.java
-        package com.fastplace;
+        cat << 'EOF' > src/main/java/com/autorepeat/AutoRepeatMod.java
+        package com.autorepeat;
         
         import net.fabricmc.api.ClientModInitializer;
         
-        public class FastPlaceMod implements ClientModInitializer {
-            public static final String MOD_ID = "fastplace";
+        public class AutoRepeatMod implements ClientModInitializer {
+            public static final String MOD_ID = "autorepeat";
             public static boolean isEnabled = false;
             
             @Override
             public void onInitializeClient() {
-                // Silent initialization - no console spam
+                // Silent initialization
             }
         }
         EOF
@@ -52,10 +52,10 @@ jobs:
     - name: Write MinecraftClientMixin.java
       shell: bash
       run: |
-        cat << 'EOF' > src/main/java/com/fastplace/mixin/MinecraftClientMixin.java
-        package com.fastplace.mixin;
+        cat << 'EOF' > src/main/java/com/autorepeat/mixin/MinecraftClientMixin.java
+        package com.autorepeat.mixin;
         
-        import com.fastplace.FastPlaceMod;
+        import com.autorepeat.AutoRepeatMod;
         import net.minecraft.client.MinecraftClient;
         import net.minecraft.client.network.ClientPlayerEntity;
         import net.minecraft.util.Hand;
@@ -86,18 +86,21 @@ jobs:
             private final Random random = new Random();
             
             /**
-             * SERVER-SAFE FAST BLOCK PLACEMENT
+             * AUTO-REPEAT FAST BLOCK PLACEMENT
+             * 
+             * When you HOLD Right Click:
+             * - Vanilla: places slowly (4-tick delay)
+             * - This mod: auto-repeats at 30-40 CPS!
              * 
              * Speed: 30-40 blocks/second (sometimes below 30)
-             * - Averages around 30-35 blocks/second
-             * - Natural variation makes it undetectable
-             * - Sometimes faster (40), sometimes slower (25-30)
+             * - Natural variation (25-40 range)
+             * - Looks human!
              * 
-             * Features:
-             * - Silent mode (no chat messages)
-             * - Natural speed variation
-             * - Human-like patterns
-             * - Server-safe rate
+             * How it works:
+             * 1. Press RIGHT ALT to enable (silent)
+             * 2. HOLD Right Click
+             * 3. Mod auto-clicks 30-40 times per second!
+             * 4. You control direction, mod controls speed!
              */
             @Inject(method = "tick", at = @At("HEAD"))
             private void onClientTick(CallbackInfo ci) {
@@ -112,47 +115,46 @@ jobs:
                 ) == GLFW.GLFW_PRESS;
                 
                 if (isRightAltPressed && !wasRightAltPressed) {
-                    FastPlaceMod.isEnabled = !FastPlaceMod.isEnabled;
-                    // No messages - completely silent!
+                    AutoRepeatMod.isEnabled = !AutoRepeatMod.isEnabled;
+                    // Silent - no messages!
                 }
                 
                 wasRightAltPressed = isRightAltPressed;
                 
-                // Decrease delay
+                // Decrease delay counter
                 if (placeDelay > 0) {
                     placeDelay--;
                 }
                 
-                // If enabled, optimize placement
-                if (FastPlaceMod.isEnabled) {
+                // If enabled
+                if (AutoRepeatMod.isEnabled) {
                     // Remove vanilla 4-tick delay
                     if (this.itemUseCooldown > 0) {
                         this.itemUseCooldown = 0;
                     }
                     
-                    // Check if holding RIGHT CLICK
+                    // Check if HOLDING Right Click
                     boolean isRightClickHeld = GLFW.glfwGetMouseButton(
                         client.getWindow().getHandle(),
                         GLFW.GLFW_MOUSE_BUTTON_RIGHT
                     ) == GLFW.GLFW_PRESS;
                     
                     if (isRightClickHeld && placeDelay == 0) {
-                        // Place 1-2 blocks per tick for balanced speed
-                        // Averages to 30-40 blocks/second
-                        // Sometimes drops below 30 for natural variation
-                        int blocksToPlace = 1 + random.nextInt(2); // 1 or 2 blocks
+                        // Auto-repeat placement!
+                        // Place 1-2 blocks per tick
+                        int blocksToPlace = 1 + random.nextInt(2); // 1 or 2
                         
                         for (int i = 0; i < blocksToPlace; i++) {
                             tryPlaceBlock(client);
                         }
                         
-                        // Delay: 0-1 tick (with occasional 2 tick delay)
-                        // Adds natural variation - sometimes slower, sometimes faster
+                        // Delay calculation for 30-40 CPS with variation
+                        // 0-1 tick base delay
                         int baseDelay = random.nextInt(2); // 0 or 1
                         
-                        // 20% chance of extra delay (drops below 30 blocks/s)
+                        // 20% chance of extra delay (drops to 25-30 CPS)
                         if (random.nextInt(10) < 2) {
-                            baseDelay += 1; // Add extra tick
+                            baseDelay += 1;
                         }
                         
                         placeDelay = baseDelay;
@@ -161,7 +163,7 @@ jobs:
             }
             
             /**
-             * Try to place a block (with safety checks)
+             * Try to place a block
              */
             private void tryPlaceBlock(MinecraftClient client) {
                 if (this.player == null) return;
@@ -172,7 +174,7 @@ jobs:
                 try {
                     BlockHitResult blockHit = (BlockHitResult) this.crosshairTarget;
                     
-                    // Place block
+                    // Place the block
                     client.interactionManager.interactBlock(
                         this.player,
                         Hand.MAIN_HAND,
@@ -195,17 +197,17 @@ jobs:
         cat << 'EOF' > src/main/resources/fabric.mod.json
         {
           "schemaVersion": 1,
-          "id": "fastplace",
+          "id": "autorepeat",
           "version": "1.0.0",
-          "name": "Fast Place",
-          "description": "Server-safe fast block placement. Press RIGHT ALT to toggle (silent mode).",
+          "name": "Auto-Repeat Place",
+          "description": "Hold Right Click to auto-place blocks at 30-40 CPS! Toggle with RIGHT ALT (silent mode).",
           "authors": ["SIGMAxox"],
           "license": "MIT",
           "environment": "client",
           "entrypoints": {
-            "client": ["com.fastplace.FastPlaceMod"]
+            "client": ["com.autorepeat.AutoRepeatMod"]
           },
-          "mixins": ["fastplace.mixins.json"],
+          "mixins": ["autorepeat.mixins.json"],
           "depends": {
             "fabricloader": ">=0.14.19",
             "minecraft": "1.20.1"
@@ -213,14 +215,14 @@ jobs:
         }
         EOF
     
-    - name: Write fastplace.mixins.json
+    - name: Write autorepeat.mixins.json
       shell: bash
       run: |
-        cat << 'EOF' > src/main/resources/fastplace.mixins.json
+        cat << 'EOF' > src/main/resources/autorepeat.mixins.json
         {
           "required": true,
           "minVersion": "0.8",
-          "package": "com.fastplace.mixin",
+          "package": "com.autorepeat.mixin",
           "compatibilityLevel": "JAVA_17",
           "client": ["MinecraftClientMixin"],
           "injectors": {"defaultRequire": 1}
@@ -239,9 +241,9 @@ jobs:
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
         
-        archivesBaseName = "fast-place"
+        archivesBaseName = "auto-repeat-place"
         version = "1.0.0"
-        group = "com.fastplace"
+        group = "com.autorepeat"
         
         repositories {
             maven { url 'https://maven.fabricmc.net/' }
@@ -297,7 +299,7 @@ jobs:
                 gradlePluginPortal()
             }
         }
-        rootProject.name = 'fast-place'
+        rootProject.name = 'auto-repeat-place'
         EOF
     
     - name: Create Gradle Wrapper
@@ -325,5 +327,5 @@ jobs:
     - name: Upload Mod JAR
       uses: actions/upload-artifact@v4
       with:
-        name: fast-place-v1.0.0-server-safe-mc1.20.1
+        name: auto-repeat-place-v1.0.0-30-40cps-mc1.20.1
         path: build/libs/*.jar
