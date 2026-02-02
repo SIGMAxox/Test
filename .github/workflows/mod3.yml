@@ -164,7 +164,7 @@ jobs:
             }
             
             /**
-             * Try to place a block (with proper hand animation)
+             * Try to place a block (with proper hand animation ONLY if block placed)
              */
             private void tryPlaceBlock(MinecraftClient client) {
                 if (this.player == null) return;
@@ -175,16 +175,18 @@ jobs:
                 try {
                     BlockHitResult blockHit = (BlockHitResult) this.crosshairTarget;
                     
-                    // Place the block
-                    client.interactionManager.interactBlock(
+                    // Try to place the block and check if it succeeded
+                    var result = client.interactionManager.interactBlock(
                         this.player,
                         Hand.MAIN_HAND,
                         blockHit
                     );
                     
-                    // ALWAYS swing hand - proper vanilla behavior!
-                    // Each block placed = one hand swing
-                    this.player.swingHand(Hand.MAIN_HAND);
+                    // ONLY swing hand if block was actually placed!
+                    // If placement failed (hitbox conflict, etc.), don't swing!
+                    if (result.isAccepted()) {
+                        this.player.swingHand(Hand.MAIN_HAND);
+                    }
                     
                 } catch (Exception e) {
                     // Silent fail
