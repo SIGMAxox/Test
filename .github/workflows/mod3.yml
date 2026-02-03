@@ -1,4 +1,4 @@
-name: Build Auto-Repeat Fast Place (1.20.1 - Hold to Place 30-40 CPS)
+name: Build Adjustable Fast Place (1.20.1 - Right Shift to Adjust Speed)
 
 on:
   workflow_dispatch:
@@ -27,20 +27,21 @@ jobs:
     
     - name: Create directories
       run: |
-        mkdir -p src/main/java/com/autorepeat/mixin
+        mkdir -p src/main/java/com/adjustplace/mixin
         mkdir -p src/main/resources
     
-    - name: Write AutoRepeatMod.java
+    - name: Write AdjustPlaceMod.java
       shell: bash
       run: |
-        cat << 'EOF' > src/main/java/com/autorepeat/AutoRepeatMod.java
-        package com.autorepeat;
+        cat << 'EOF' > src/main/java/com/adjustplace/AdjustPlaceMod.java
+        package com.adjustplace;
         
         import net.fabricmc.api.ClientModInitializer;
         
-        public class AutoRepeatMod implements ClientModInitializer {
-            public static final String MOD_ID = "autorepeat";
+        public class AdjustPlaceMod implements ClientModInitializer {
+            public static final String MOD_ID = "adjustplace";
             public static boolean isEnabled = false;
+            public static int targetCPS = 30; // Default: 30 CPS
             
             @Override
             public void onInitializeClient() {
@@ -52,12 +53,13 @@ jobs:
     - name: Write MinecraftClientMixin.java
       shell: bash
       run: |
-        cat << 'EOF' > src/main/java/com/autorepeat/mixin/MinecraftClientMixin.java
-        package com.autorepeat.mixin;
+        cat << 'EOF' > src/main/java/com/adjustplace/mixin/MinecraftClientMixin.java
+        package com.adjustplace.mixin;
         
-        import com.autorepeat.AutoRepeatMod;
+        import com.adjustplace.AdjustPlaceMod;
         import net.minecraft.client.MinecraftClient;
         import net.minecraft.client.network.ClientPlayerEntity;
+        import net.minecraft.text.Text;
         import net.minecraft.util.Hand;
         import net.minecraft.util.hit.BlockHitResult;
         import net.minecraft.util.hit.HitResult;
@@ -82,27 +84,22 @@ jobs:
             private int itemUseCooldown;
             
             private boolean wasRightAltPressed = false;
+            private boolean wasRightShiftPressed = false;
             private int placeDelay = 0;
             private final Random random = new Random();
+            private int messageTimer = 0;
             
             /**
-             * AUTO-REPEAT FAST BLOCK PLACEMENT
+             * ADJUSTABLE FAST BLOCK PLACEMENT
              * 
-             * When you HOLD Right Click:
-             * - Vanilla: places slowly (4-tick delay)
-             * - This mod: auto-repeats at 30-40 CPS!
+             * Controls:
+             * - RIGHT ALT: Toggle on/off
+             * - RIGHT SHIFT: Cycle through speeds (10, 20, 30, 40, 50 CPS)
              * 
-             * Speed: 30-40 blocks/second (sometimes below 30)
-             * - Natural variation (25-40 range)
-             * - Looks human!
-             * 
-             * How it works:
-             * 1. Press RIGHT ALT to enable (silent)
-             * 2. HOLD Right Click
-             * 3. Mod places ONE block at a time (proper animation!)
-             * 4. But does it 30 times per second!
-             * 5. Each placement = proper hand swing (like vanilla!)
-             * 6. You control direction, mod controls speed!
+             * Features:
+             * - Adjustable speed while playing!
+             * - Each block placement = proper hand swing
+             * - Only swings when block actually places
              */
             @Inject(method = "tick", at = @At("HEAD"))
             private void onClientTick(CallbackInfo ci) {
@@ -110,18 +107,56 @@ jobs:
                 
                 MinecraftClient client = (MinecraftClient)(Object)this;
                 
-                // Toggle with RIGHT ALT (silent)
+                // Decrease message timer
+                if (messageTimer > 0) {
+                    messageTimer--;
+                }
+                
+                // Toggle with RIGHT ALT
                 boolean isRightAltPressed = GLFW.glfwGetKey(
                     client.getWindow().getHandle(), 
                     GLFW.GLFW_KEY_RIGHT_ALT
                 ) == GLFW.GLFW_PRESS;
                 
                 if (isRightAltPressed && !wasRightAltPressed) {
-                    AutoRepeatMod.isEnabled = !AutoRepeatMod.isEnabled;
-                    // Silent - no messages!
+                    AdjustPlaceMod.isEnabled = !AdjustPlaceMod.isEnabled;
+                    if (messageTimer == 0) {
+                        String status = AdjustPlaceMod.isEnabled ? "§a§lON" : "§c§lOFF";
+                        this.player.sendMessage(
+                            Text.literal("§6[Fast Place] " + status + " §7(" + AdjustPlaceMod.targetCPS + " CPS)"), 
+                            true
+                        );
+                        messageTimer = 20; // 1 second
+                    }
                 }
-                
                 wasRightAltPressed = isRightAltPressed;
+                
+                // Adjust speed with RIGHT SHIFT
+                boolean isRightShiftPressed = GLFW.glfwGetKey(
+                    client.getWindow().getHandle(), 
+                    GLFW.GLFW_KEY_RIGHT_SHIFT
+                ) == GLFW.GLFW_PRESS;
+                
+                if (isRightShiftPressed && !wasRightShiftPressed) {
+                    // Cycle: 10 → 20 → 30 → 40 → 50 → 10...
+                    switch (AdjustPlaceMod.targetCPS) {
+                        case 10 -> AdjustPlaceMod.targetCPS = 20;
+                        case 20 -> AdjustPlaceMod.targetCPS = 30;
+                        case 30 -> AdjustPlaceMod.targetCPS = 40;
+                        case 40 -> AdjustPlaceMod.targetCPS = 50;
+                        case 50 -> AdjustPlaceMod.targetCPS = 10;
+                        default -> AdjustPlaceMod.targetCPS = 30;
+                    }
+                    
+                    if (messageTimer == 0) {
+                        this.player.sendMessage(
+                            Text.literal("§6[Fast Place] Speed: §b§l" + AdjustPlaceMod.targetCPS + " CPS"), 
+                            true
+                        );
+                        messageTimer = 20;
+                    }
+                }
+                wasRightShiftPressed = isRightShiftPressed;
                 
                 // Decrease delay counter
                 if (placeDelay > 0) {
@@ -129,7 +164,7 @@ jobs:
                 }
                 
                 // If enabled
-                if (AutoRepeatMod.isEnabled) {
+                if (AdjustPlaceMod.isEnabled) {
                     // Remove vanilla 4-tick delay
                     if (this.itemUseCooldown > 0) {
                         this.itemUseCooldown = 0;
@@ -142,23 +177,21 @@ jobs:
                     ) == GLFW.GLFW_PRESS;
                     
                     if (isRightClickHeld && placeDelay == 0) {
-                        // Place ONE block at a time (for proper animation)
-                        // But do it frequently (30-40 times per second)
+                        // Place one block
                         tryPlaceBlock(client);
                         
-                        // Delay calculation for 30-40 CPS with variation
-                        // Higher chance of 0 tick, lower chance of 1-2 ticks
-                        int rand = random.nextInt(10);
+                        // Calculate delay based on target CPS
+                        // Formula: delay (in ticks) = 20 / targetCPS
+                        // Example: 30 CPS → 20/30 = 0.66 ticks average
+                        float ticksPerPlacement = 20.0f / AdjustPlaceMod.targetCPS;
                         
-                        if (rand < 5) {
-                            placeDelay = 0; // 50% → 40 CPS
-                        } else if (rand < 8) {
-                            placeDelay = 1; // 30% → 20 CPS
-                        } else {
-                            placeDelay = 2; // 20% → 10 CPS
-                        }
+                        // Add randomness for natural feel
+                        // ±20% variation
+                        float variation = (random.nextFloat() * 0.4f) - 0.2f; // -0.2 to +0.2
+                        ticksPerPlacement = ticksPerPlacement * (1.0f + variation);
                         
-                        // Average: ~30 blocks/second with proper animations!
+                        // Convert to integer delay
+                        placeDelay = Math.max(0, Math.round(ticksPerPlacement));
                     }
                 }
             }
@@ -175,7 +208,7 @@ jobs:
                 try {
                     BlockHitResult blockHit = (BlockHitResult) this.crosshairTarget;
                     
-                    // Try to place the block and check if it succeeded
+                    // Try to place the block
                     var result = client.interactionManager.interactBlock(
                         this.player,
                         Hand.MAIN_HAND,
@@ -183,7 +216,6 @@ jobs:
                     );
                     
                     // ONLY swing hand if block was actually placed!
-                    // If placement failed (hitbox conflict, etc.), don't swing!
                     if (result.isAccepted()) {
                         this.player.swingHand(Hand.MAIN_HAND);
                     }
@@ -201,17 +233,17 @@ jobs:
         cat << 'EOF' > src/main/resources/fabric.mod.json
         {
           "schemaVersion": 1,
-          "id": "autorepeat",
+          "id": "adjustplace",
           "version": "1.0.0",
-          "name": "Auto-Repeat Place",
-          "description": "Hold Right Click to auto-place blocks at 30-40 CPS! Toggle with RIGHT ALT (silent mode).",
+          "name": "Adjustable Fast Place",
+          "description": "RIGHT ALT = Toggle, RIGHT SHIFT = Adjust Speed (10-50 CPS). Hold Right Click to place blocks!",
           "authors": ["SIGMAxox"],
           "license": "MIT",
           "environment": "client",
           "entrypoints": {
-            "client": ["com.autorepeat.AutoRepeatMod"]
+            "client": ["com.adjustplace.AdjustPlaceMod"]
           },
-          "mixins": ["autorepeat.mixins.json"],
+          "mixins": ["adjustplace.mixins.json"],
           "depends": {
             "fabricloader": ">=0.14.19",
             "minecraft": "1.20.1"
@@ -219,14 +251,14 @@ jobs:
         }
         EOF
     
-    - name: Write autorepeat.mixins.json
+    - name: Write adjustplace.mixins.json
       shell: bash
       run: |
-        cat << 'EOF' > src/main/resources/autorepeat.mixins.json
+        cat << 'EOF' > src/main/resources/adjustplace.mixins.json
         {
           "required": true,
           "minVersion": "0.8",
-          "package": "com.autorepeat.mixin",
+          "package": "com.adjustplace.mixin",
           "compatibilityLevel": "JAVA_17",
           "client": ["MinecraftClientMixin"],
           "injectors": {"defaultRequire": 1}
@@ -245,9 +277,9 @@ jobs:
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
         
-        archivesBaseName = "auto-repeat-place"
+        archivesBaseName = "adjustable-fast-place"
         version = "1.0.0"
-        group = "com.autorepeat"
+        group = "com.adjustplace"
         
         repositories {
             maven { url 'https://maven.fabricmc.net/' }
@@ -303,7 +335,7 @@ jobs:
                 gradlePluginPortal()
             }
         }
-        rootProject.name = 'auto-repeat-place'
+        rootProject.name = 'adjustable-fast-place'
         EOF
     
     - name: Create Gradle Wrapper
@@ -331,5 +363,5 @@ jobs:
     - name: Upload Mod JAR
       uses: actions/upload-artifact@v4
       with:
-        name: auto-repeat-place-v1.0.0-30-40cps-mc1.20.1
+        name: adjustable-fast-place-v1.0.0-10-50cps-mc1.20.1
         path: build/libs/*.jar
