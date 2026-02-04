@@ -46,7 +46,7 @@ jobs:
             public void onInitializeClient() {
                 System.out.println("[Right Click CPS] Mod loaded!");
                 System.out.println("[Right Click CPS] Press RIGHT ALT to toggle!");
-                System.out.println("[Right Click CPS] Hold right-click while holding blocks = 15-20 CPS auto-place!");
+                System.out.println("[Right Click CPS] Hold right-click while holding blocks = 15 CPS FIXED!");
             }
         }
         EOF
@@ -63,6 +63,7 @@ jobs:
         import net.minecraft.item.BlockItem;
         import net.minecraft.item.ItemStack;
         import net.minecraft.text.Text;
+        import net.minecraft.util.Hand;
         import org.lwjgl.glfw.GLFW;
         import org.spongepowered.asm.mixin.Mixin;
         import org.spongepowered.asm.mixin.Shadow;
@@ -70,26 +71,28 @@ jobs:
         import org.spongepowered.asm.mixin.injection.Inject;
         import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
         
-        import java.util.Random;
-        
         @Mixin(MinecraftClient.class)
         public class MinecraftClientMixin {
             @Shadow
             public ClientPlayerEntity player;
             
             private boolean wasAltPressed = false;
-            private long lastAutoClickTime = 0;
-            private int rightClickDelayTimer = 0;
-            private Random random = new Random();
+            private int rightClickCounter = 0;
             
             /**
              * Right Click CPS Mod - Minecraft 1.20.1
              * 
              * المميزات:
-             * ✅ Auto Right-Click: 15-20 CPS عند مسك البلوكات
+             * ✅ Auto Right-Click: 15 CPS ثابت عند مسك البلوكات
              * ✅ Toggle بـ RIGHT ALT
              * ✅ يشتغل فقط لما تكون ماسك بلوكة
              * ✅ يشتغل لما تضغط Right Click مطول
+             * 
+             * الحسبة:
+             * - Minecraft بيشتغل بـ 20 TPS (ticks per second)
+             * - عشان نوصل لـ 15 CPS، محتاجين نحط بلوكة كل 1.33 tick
+             * - يعني: كل tick نشوف هل counter >= 1.33
+             * - لو أيوه، نحط بلوكة ونصفر الـ counter
              * 
              * ⚠️ تحذير: هذا المود قد يعتبر غش في بعض السيرفرات!
              * استخدمه على مسؤوليتك الشخصية!
@@ -109,7 +112,7 @@ jobs:
                 if (isAltPressed && !wasAltPressed) {
                     RightClickCPSMod.isEnabled = !RightClickCPSMod.isEnabled;
                     String status = RightClickCPSMod.isEnabled ? 
-                        "§a§lON §7(15-20 CPS)" : "§c§lOFF";
+                        "§a§lON §7(15 CPS Fixed)" : "§c§lOFF";
                     this.player.sendMessage(
                         Text.literal("§6§l[Right Click CPS] " + status), 
                         true
@@ -118,9 +121,9 @@ jobs:
                 
                 wasAltPressed = isAltPressed;
                 
-                // لو المود مش شغال، متعملش حاجة
+                // لو المود مش شغال، صفر الـ counter
                 if (!RightClickCPSMod.isEnabled) {
-                    rightClickDelayTimer = 0;
+                    rightClickCounter = 0;
                     return;
                 }
                 
@@ -130,6 +133,15 @@ jobs:
             
             /**
              * تطبيق Auto Right Click لما اللاعب ماسك بلوكة وضاغط Right Click
+             * 
+             * الحسبة بالتفصيل:
+             * - عايزين 15 clicks في الثانية
+             * - Minecraft = 20 ticks في الثانية
+             * - يعني كل click محتاج: 20 ticks ÷ 15 clicks = 1.333 ticks
+             * - هنعمل counter بيزيد بـ 3 كل tick
+             * - ولما يوصل 4 أو أكتر، نعمل click ونطرح 4
+             * - كده هنوصل لـ: 3 ticks لكل 4 counter = 3÷4 = 0.75 tick per click
+             * - يعني: 20 ÷ 1.333 = 15 clicks per second! ✅
              */
             private void applyAutoRightClick(MinecraftClient client) {
                 if (this.player == null) return;
@@ -137,7 +149,7 @@ jobs:
                 // التأكد إن اللاعب ماسك بلوكة في إيده
                 ItemStack mainHandStack = this.player.getMainHandStack();
                 if (mainHandStack.isEmpty() || !(mainHandStack.getItem() instanceof BlockItem)) {
-                    rightClickDelayTimer = 0;
+                    rightClickCounter = 0;
                     return; // مش ماسك بلوكة، متعملش حاجة
                 }
                 
@@ -148,62 +160,42 @@ jobs:
                 ) == GLFW.GLFW_PRESS;
                 
                 if (!isRightClickPressed) {
-                    rightClickDelayTimer = 0;
+                    rightClickCounter = 0;
                     return; // Right Click مش مضغوط
                 }
                 
-                // تقليل الـ timer
-                if (rightClickDelayTimer > 0) {
-                    rightClickDelayTimer--;
-                    return;
+                // زود الـ counter بـ 3 كل tick
+                // ده هيخلينا نوصل لـ 15 CPS بالظبط
+                rightClickCounter += 3;
+                
+                // لو الـ counter وصل 4 أو أكتر، اعمل click
+                if (rightClickCounter >= 4) {
+                    // اطرح 4 من الـ counter
+                    rightClickCounter -= 4;
+                    
+                    // تنفيذ Right Click
+                    performRightClick(client);
                 }
-                
-                // حساب الـ CPS delay (عشوائي بين 15-20 CPS)
-                // 15 CPS = ~1.33 ticks between clicks (3-4 ticks)
-                // 20 CPS = ~1 tick between clicks (2-3 ticks)
-                // Minecraft runs at 20 TPS (ticks per second)
-                int minTicks = 1;  // 20 CPS (أسرع)
-                int maxTicks = 2;  // ~10-15 CPS
-                rightClickDelayTimer = minTicks + random.nextInt(maxTicks);
-                
-                // تنفيذ Right Click
-                performRightClick(client);
             }
             
             /**
              * تنفيذ Right Click فعلي
-             * 
-             * هنا الطريقة الصحيحة لعمل right click:
-             * بدل ما نستدعي interactItem مباشرة، هنعمل simulate للـ right click
-             * عن طريق إننا نضغط ونفك الزرار بسرعة
              */
             private void performRightClick(MinecraftClient client) {
                 if (client.interactionManager == null || this.player == null) {
                     return;
                 }
                 
-                // استدعاء الـ doItemUse اللي بيحصل لما تضغط Right Click
-                // ده بيعمل interaction مع الـ world و بيحط البلوكات
                 try {
-                    // الطريقة الصحيحة: نستخدم الـ options.useKey
-                    // ونعمل simulate لـ right click
-                    client.options.useKey.setPressed(true);
-                    
-                    // نستنى tick واحد (المفروض ده يحصل أوتوماتيك)
-                    // بس عشان نضمن التنفيذ، هنعمل call للـ doItemUse
-                    if (client.crosshairTarget != null) {
-                        // لو في حاجة قدامك، اعمل interact
-                        client.interactionManager.interactItem(
-                            this.player,
-                            this.player.getActiveHand()
-                        );
-                    }
-                    
-                    // فك الضغط بسرعة
-                    client.options.useKey.setPressed(false);
+                    // استدعاء الـ interactItem بالـ signature الصحيح
+                    // ده بيعمل نفس تأثير لما تضغط Right Click يدوياً
+                    client.interactionManager.interactItem(
+                        this.player,
+                        Hand.MAIN_HAND
+                    );
                 } catch (Exception e) {
                     // لو حصل أي مشكلة، اطبع error
-                    System.err.println("[Right Click CPS] Error performing right click: " + e.getMessage());
+                    System.err.println("[Right Click CPS] Error: " + e.getMessage());
                 }
             }
         }
@@ -218,7 +210,7 @@ jobs:
           "id": "rightclickcps",
           "version": "1.0.0",
           "name": "Right Click CPS",
-          "description": "Press RIGHT ALT to toggle! Auto right-click (15-20 CPS) when holding blocks. Hold right-click and watch the magic!",
+          "description": "Press RIGHT ALT to toggle! Auto right-click (15 CPS FIXED) when holding blocks. Hold right-click and watch the magic!",
           "authors": ["SIGMAxox"],
           "license": "MIT",
           "environment": "client",
