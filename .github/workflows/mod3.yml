@@ -45,7 +45,7 @@ jobs:
             @Override
             public void onInitializeClient() {
                 System.out.println("[Right Click CPS] Mod loaded!");
-                System.out.println("[Right Click CPS] Press LEFT ALT to toggle!");
+                System.out.println("[Right Click CPS] Press RIGHT ALT to toggle!");
                 System.out.println("[Right Click CPS] Hold right-click while holding blocks = 15-20 CPS auto-place!");
             }
         }
@@ -63,6 +63,7 @@ jobs:
         import net.minecraft.item.BlockItem;
         import net.minecraft.item.ItemStack;
         import net.minecraft.text.Text;
+        import net.minecraft.util.Hand;
         import org.lwjgl.glfw.GLFW;
         import org.spongepowered.asm.mixin.Mixin;
         import org.spongepowered.asm.mixin.Shadow;
@@ -86,7 +87,7 @@ jobs:
              * 
              * المميزات:
              * ✅ Auto Right-Click: 15-20 CPS عند مسك البلوكات
-             * ✅ Toggle بـ LEFT ALT
+             * ✅ Toggle بـ RIGHT ALT
              * ✅ يشتغل فقط لما تكون ماسك بلوكة
              * ✅ يشتغل لما تضغط Right Click مطول
              * 
@@ -99,10 +100,10 @@ jobs:
                 
                 MinecraftClient client = (MinecraftClient)(Object)this;
                 
-                // Toggle بـ LEFT ALT (GLFW_KEY_LEFT_ALT)
+                // Toggle بـ RIGHT ALT (GLFW_KEY_RIGHT_ALT)
                 boolean isAltPressed = GLFW.glfwGetKey(
                     client.getWindow().getHandle(), 
-                    GLFW.GLFW_KEY_LEFT_ALT
+                    GLFW.GLFW_KEY_RIGHT_ALT
                 ) == GLFW.GLFW_PRESS;
                 
                 if (isAltPressed && !wasAltPressed) {
@@ -169,13 +170,13 @@ jobs:
              * تنفيذ Right Click فعلي
              */
             private void performRightClick(MinecraftClient client) {
-                // استدعاء دالة الـ doItemUse اللي بتنفذ Right Click
-                if (client.interactionManager != null) {
+                // استدعاء دالة الـ interactItem بالـ signature الصحيح
+                if (client.interactionManager != null && this.player != null) {
                     // ده بيعمل نفس تأثير لما تضغط Right Click يدوياً
+                    // الـ signature الصحيح: interactItem(PlayerEntity, Hand)
                     client.interactionManager.interactItem(
-                        this.player, 
-                        this.player.getWorld(), 
-                        this.player.getActiveHand()
+                        this.player,
+                        Hand.MAIN_HAND
                     );
                 }
             }
@@ -191,7 +192,7 @@ jobs:
           "id": "rightclickcps",
           "version": "1.0.0",
           "name": "Right Click CPS",
-          "description": "Press LEFT ALT to toggle! Auto right-click (15-20 CPS) when holding blocks. Hold right-click and watch the magic!",
+          "description": "Press RIGHT ALT to toggle! Auto right-click (15-20 CPS) when holding blocks. Hold right-click and watch the magic!",
           "authors": ["SIGMAxox"],
           "license": "MIT",
           "environment": "client",
