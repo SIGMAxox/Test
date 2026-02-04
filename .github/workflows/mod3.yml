@@ -1,4 +1,4 @@
-name: Build Simple Fast Place (1.20.1 - 15-20 CPS Fixed)
+name: Build Right Click CPS Mod (1.20.1 - Auto Place Blocks)
 
 on:
   workflow_dispatch:
@@ -27,24 +27,26 @@ jobs:
     
     - name: Create directories
       run: |
-        mkdir -p src/main/java/com/simplefast/mixin
+        mkdir -p src/main/java/com/rightclickcps/mixin
         mkdir -p src/main/resources
     
-    - name: Write SimpleFastMod.java
+    - name: Write RightClickCPSMod.java
       shell: bash
       run: |
-        cat << 'EOF' > src/main/java/com/simplefast/SimpleFastMod.java
-        package com.simplefast;
+        cat << 'EOF' > src/main/java/com/rightclickcps/RightClickCPSMod.java
+        package com.rightclickcps;
         
         import net.fabricmc.api.ClientModInitializer;
         
-        public class SimpleFastMod implements ClientModInitializer {
-            public static final String MOD_ID = "simplefast";
+        public class RightClickCPSMod implements ClientModInitializer {
+            public static final String MOD_ID = "rightclickcps";
             public static boolean isEnabled = false;
             
             @Override
             public void onInitializeClient() {
-                // Silent initialization
+                System.out.println("[Right Click CPS] Mod loaded!");
+                System.out.println("[Right Click CPS] Press LEFT ALT to toggle!");
+                System.out.println("[Right Click CPS] Hold right-click while holding blocks = 15-20 CPS auto-place!");
             }
         }
         EOF
@@ -52,15 +54,15 @@ jobs:
     - name: Write MinecraftClientMixin.java
       shell: bash
       run: |
-        cat << 'EOF' > src/main/java/com/simplefast/mixin/MinecraftClientMixin.java
-        package com.simplefast.mixin;
+        cat << 'EOF' > src/main/java/com/rightclickcps/mixin/MinecraftClientMixin.java
+        package com.rightclickcps.mixin;
         
-        import com.simplefast.SimpleFastMod;
+        import com.rightclickcps.RightClickCPSMod;
         import net.minecraft.client.MinecraftClient;
         import net.minecraft.client.network.ClientPlayerEntity;
-        import net.minecraft.util.Hand;
-        import net.minecraft.util.hit.BlockHitResult;
-        import net.minecraft.util.hit.HitResult;
+        import net.minecraft.item.BlockItem;
+        import net.minecraft.item.ItemStack;
+        import net.minecraft.text.Text;
         import org.lwjgl.glfw.GLFW;
         import org.spongepowered.asm.mixin.Mixin;
         import org.spongepowered.asm.mixin.Shadow;
@@ -75,32 +77,21 @@ jobs:
             @Shadow
             public ClientPlayerEntity player;
             
-            @Shadow
-            public HitResult crosshairTarget;
-            
-            @Shadow
-            private int itemUseCooldown;
-            
-            private boolean wasRightAltPressed = false;
-            private int placeDelay = 0;
-            private final Random random = new Random();
+            private boolean wasAltPressed = false;
+            private long lastAutoClickTime = 0;
+            private Random random = new Random();
             
             /**
-             * SIMPLE FAST BLOCK PLACEMENT
+             * Right Click CPS Mod - Minecraft 1.20.1
              * 
-             * Speed: 15-20 CPS with natural variation
-             * - Average: ~17 blocks/second
-             * - Natural human-like variation
+             * المميزات:
+             * ✅ Auto Right-Click: 15-20 CPS عند مسك البلوكات
+             * ✅ Toggle بـ LEFT ALT
+             * ✅ يشتغل فقط لما تكون ماسك بلوكة
+             * ✅ يشتغل لما تضغط Right Click مطول
              * 
-             * Controls:
-             * - RIGHT ALT: Toggle on/off (silent)
-             * - Hold Right Click: Place blocks fast!
-             * 
-             * Features:
-             * - Fixed speed (no adjustment needed)
-             * - Proper hand animations
-             * - Only swings when block places
-             * - Server-safe and undetectable
+             * ⚠️ تحذير: هذا المود قد يعتبر غش في بعض السيرفرات!
+             * استخدمه على مسؤوليتك الشخصية!
              */
             @Inject(method = "tick", at = @At("HEAD"))
             private void onClientTick(CallbackInfo ci) {
@@ -108,91 +99,84 @@ jobs:
                 
                 MinecraftClient client = (MinecraftClient)(Object)this;
                 
-                // Toggle with RIGHT ALT (silent)
-                boolean isRightAltPressed = GLFW.glfwGetKey(
+                // Toggle بـ LEFT ALT (GLFW_KEY_LEFT_ALT)
+                boolean isAltPressed = GLFW.glfwGetKey(
                     client.getWindow().getHandle(), 
-                    GLFW.GLFW_KEY_RIGHT_ALT
+                    GLFW.GLFW_KEY_LEFT_ALT
                 ) == GLFW.GLFW_PRESS;
                 
-                if (isRightAltPressed && !wasRightAltPressed) {
-                    SimpleFastMod.isEnabled = !SimpleFastMod.isEnabled;
-                    // Silent - no messages!
+                if (isAltPressed && !wasAltPressed) {
+                    RightClickCPSMod.isEnabled = !RightClickCPSMod.isEnabled;
+                    String status = RightClickCPSMod.isEnabled ? 
+                        "§a§lON §7(15-20 CPS)" : "§c§lOFF";
+                    this.player.sendMessage(
+                        Text.literal("§6§l[Right Click CPS] " + status), 
+                        true
+                    );
                 }
                 
-                wasRightAltPressed = isRightAltPressed;
+                wasAltPressed = isAltPressed;
                 
-                // Decrease delay counter
-                if (placeDelay > 0) {
-                    placeDelay--;
+                // لو المود مش شغال، متعملش حاجة
+                if (!RightClickCPSMod.isEnabled) return;
+                
+                // تطبيق الـ Auto Right Click
+                applyAutoRightClick(client);
+            }
+            
+            /**
+             * تطبيق Auto Right Click لما اللاعب ماسك بلوكة وضاغط Right Click
+             */
+            private void applyAutoRightClick(MinecraftClient client) {
+                if (this.player == null) return;
+                
+                // التأكد إن اللاعب ماسك بلوكة في إيده
+                ItemStack mainHandStack = this.player.getMainHandStack();
+                if (mainHandStack.isEmpty() || !(mainHandStack.getItem() instanceof BlockItem)) {
+                    return; // مش ماسك بلوكة، متعملش حاجة
                 }
                 
-                // If enabled
-                if (SimpleFastMod.isEnabled) {
-                    // Remove vanilla 4-tick delay
-                    if (this.itemUseCooldown > 0) {
-                        this.itemUseCooldown = 0;
-                    }
-                    
-                    // Check if HOLDING Right Click
-                    boolean isRightClickHeld = GLFW.glfwGetMouseButton(
-                        client.getWindow().getHandle(),
-                        GLFW.GLFW_MOUSE_BUTTON_RIGHT
-                    ) == GLFW.GLFW_PRESS;
-                    
-                    if (isRightClickHeld && placeDelay == 0) {
-                        // Place one block
-                        tryPlaceBlock(client);
-                        
-                        // Calculate delay for 15-20 CPS with natural variation
-                        // Target: ~17 CPS average
-                        // Formula: 20 ticks/second ÷ 17 CPS = 1.17 ticks per placement
-                        
-                        int rand = random.nextInt(10);
-                        
-                        if (rand < 3) {
-                            // 30% chance: 0 tick delay = 20 CPS (fast burst)
-                            placeDelay = 0;
-                        } else if (rand < 7) {
-                            // 40% chance: 1 tick delay = 10 CPS (normal)
-                            placeDelay = 1;
-                        } else {
-                            // 30% chance: 2 tick delay = 6.6 CPS (slower)
-                            placeDelay = 2;
-                        }
-                        
-                        // This creates natural variation:
-                        // Fast moments, normal speed, and occasional slow
-                        // Average: ~15-17 blocks/second
-                    }
+                // التأكد إن Right Click مضغوط
+                boolean isRightClickPressed = GLFW.glfwGetMouseButton(
+                    client.getWindow().getHandle(),
+                    GLFW.GLFW_MOUSE_BUTTON_RIGHT
+                ) == GLFW.GLFW_PRESS;
+                
+                if (!isRightClickPressed) {
+                    return; // Right Click مش مضغوط
+                }
+                
+                // حساب الوقت الحالي
+                long currentTime = System.currentTimeMillis();
+                
+                // حساب الـ CPS delay (عشوائي بين 15-20 CPS)
+                // 15 CPS = 66.67ms delay
+                // 20 CPS = 50ms delay
+                // نعمل random بينهم عشان يبقى طبيعي أكتر
+                int minDelay = 50;  // 20 CPS
+                int maxDelay = 67;  // 15 CPS
+                int clickDelay = minDelay + random.nextInt(maxDelay - minDelay + 1);
+                
+                // لو عدى الوقت المطلوب، اعمل click
+                if (currentTime - lastAutoClickTime >= clickDelay) {
+                    // تنفيذ Right Click
+                    performRightClick(client);
+                    lastAutoClickTime = currentTime;
                 }
             }
             
             /**
-             * Try to place a block (with proper hand animation ONLY if block placed)
+             * تنفيذ Right Click فعلي
              */
-            private void tryPlaceBlock(MinecraftClient client) {
-                if (this.player == null) return;
-                if (this.crosshairTarget == null) return;
-                if (this.crosshairTarget.getType() != HitResult.Type.BLOCK) return;
-                if (this.player.getMainHandStack().isEmpty()) return;
-                
-                try {
-                    BlockHitResult blockHit = (BlockHitResult) this.crosshairTarget;
-                    
-                    // Try to place the block
-                    var result = client.interactionManager.interactBlock(
-                        this.player,
-                        Hand.MAIN_HAND,
-                        blockHit
+            private void performRightClick(MinecraftClient client) {
+                // استدعاء دالة الـ doItemUse اللي بتنفذ Right Click
+                if (client.interactionManager != null) {
+                    // ده بيعمل نفس تأثير لما تضغط Right Click يدوياً
+                    client.interactionManager.interactItem(
+                        this.player, 
+                        this.player.getWorld(), 
+                        this.player.getActiveHand()
                     );
-                    
-                    // ONLY swing hand if block was actually placed!
-                    if (result.isAccepted()) {
-                        this.player.swingHand(Hand.MAIN_HAND);
-                    }
-                    
-                } catch (Exception e) {
-                    // Silent fail
                 }
             }
         }
@@ -204,17 +188,17 @@ jobs:
         cat << 'EOF' > src/main/resources/fabric.mod.json
         {
           "schemaVersion": 1,
-          "id": "simplefast",
+          "id": "rightclickcps",
           "version": "1.0.0",
-          "name": "Simple Fast Place",
-          "description": "Simple and clean. RIGHT ALT to toggle. Hold Right Click to place blocks at 15-20 CPS!",
-          "authors": ["Builder"],
+          "name": "Right Click CPS",
+          "description": "Press LEFT ALT to toggle! Auto right-click (15-20 CPS) when holding blocks. Hold right-click and watch the magic!",
+          "authors": ["SIGMAxox"],
           "license": "MIT",
           "environment": "client",
           "entrypoints": {
-            "client": ["com.simplefast.SimpleFastMod"]
+            "client": ["com.rightclickcps.RightClickCPSMod"]
           },
-          "mixins": ["simplefast.mixins.json"],
+          "mixins": ["rightclickcps.mixins.json"],
           "depends": {
             "fabricloader": ">=0.14.19",
             "minecraft": "1.20.1"
@@ -222,16 +206,18 @@ jobs:
         }
         EOF
     
-    - name: Write simplefast.mixins.json
+    - name: Write rightclickcps.mixins.json
       shell: bash
       run: |
-        cat << 'EOF' > src/main/resources/simplefast.mixins.json
+        cat << 'EOF' > src/main/resources/rightclickcps.mixins.json
         {
           "required": true,
           "minVersion": "0.8",
-          "package": "com.simplefast.mixin",
+          "package": "com.rightclickcps.mixin",
           "compatibilityLevel": "JAVA_17",
-          "client": ["MinecraftClientMixin"],
+          "client": [
+            "MinecraftClientMixin"
+          ],
           "injectors": {"defaultRequire": 1}
         }
         EOF
@@ -248,9 +234,9 @@ jobs:
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
         
-        archivesBaseName = "simple-fast-place"
+        archivesBaseName = "right-click-cps"
         version = "1.0.0"
-        group = "com.simplefast"
+        group = "com.rightclickcps"
         
         repositories {
             maven { url 'https://maven.fabricmc.net/' }
@@ -306,7 +292,7 @@ jobs:
                 gradlePluginPortal()
             }
         }
-        rootProject.name = 'simple-fast-place'
+        rootProject.name = 'right-click-cps'
         EOF
     
     - name: Create Gradle Wrapper
@@ -334,5 +320,5 @@ jobs:
     - name: Upload Mod JAR
       uses: actions/upload-artifact@v4
       with:
-        name: simple-fast-place-v1.0.0-15-20cps-mc1.20.1
+        name: right-click-cps-v1.0.0-mc1.20.1
         path: build/libs/*.jar
