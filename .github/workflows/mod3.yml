@@ -46,7 +46,7 @@ jobs:
             public void onInitializeClient() {
                 System.out.println("[Right Click CPS] Mod loaded!");
                 System.out.println("[Right Click CPS] Press RIGHT ALT to toggle!");
-                System.out.println("[Right Click CPS] Hold right-click while holding blocks = 18 CPS (Speed Mode!)");
+                System.out.println("[Right Click CPS] Hold right-click while holding blocks = 19 CPS (MAX SPEED!)");
             }
         }
         EOF
@@ -86,13 +86,14 @@ jobs:
              * Right Click CPS Mod - Minecraft 1.20.1
              * 
              * المميزات:
-             * ✅ Auto Right-Click: 18 CPS ثابت عند مسك البلوكات
+             * ✅ Auto Right-Click: 19 CPS ثابت عند مسك البلوكات
              * ✅ Toggle بـ RIGHT ALT  
              * ✅ يشتغل فقط لما تكون ماسك بلوكة
              * ✅ يشتغل لما تضغط Right Click مطول
              * 
              * الطريقة:
-             * - 9 clicks كل 10 ticks = 18 CPS بالظبط! ✅
+             * - 19 clicks كل 20 ticks = 19 CPS بالظبط! ✅
+             * - قريب جداً من الـ max (20 CPS)!
              * 
              * ⚠️ تحذير: هذا المود قد يعتبر غش في بعض السيرفرات!
              * استخدمه على مسؤوليتك الشخصية!
@@ -112,7 +113,7 @@ jobs:
                 if (isAltPressed && !wasAltPressed) {
                     RightClickCPSMod.isEnabled = !RightClickCPSMod.isEnabled;
                     String status = RightClickCPSMod.isEnabled ? 
-                        "§a§lON §7(18 CPS - Speed Mode)" : "§c§lOFF";
+                        "§a§lON §7(19 CPS - MAX SPEED)" : "§c§lOFF";
                     this.player.sendMessage(
                         Text.literal("§6§l[Right Click CPS] " + status), 
                         true
@@ -134,14 +135,16 @@ jobs:
             /**
              * تطبيق Auto Right Click لما اللاعب ماسك بلوكة وضاغط Right Click
              * 
-             * الباترن لـ 18 CPS:
-             * - 9 clicks كل 10 ticks
-             * - Tick 1-9: Click ✅
-             * - Tick 10: Skip ⏭️
+             * الباترن لـ 19 CPS:
+             * - 19 clicks كل 20 ticks (ثانية واحدة!)
+             * - Tick 1-19: Click ✅
+             * - Tick 20: Skip ⏭️
              * 
              * الحسبة:
-             * - 9 clicks ÷ 10 ticks = 0.9 clicks per tick
-             * - 0.9 × 20 ticks per second = 18 CPS! 🎯
+             * - 19 clicks ÷ 20 ticks = 0.95 clicks per tick
+             * - 0.95 × 20 ticks per second = 19 CPS! 🎯
+             * 
+             * ده 95% من الـ maximum speed (20 CPS)!
              */
             private void applyAutoRightClick() {
                 if (this.player == null) return;
@@ -169,12 +172,12 @@ jobs:
                 // زود الـ counter
                 tickCounter++;
                 
-                // 9 clicks كل 10 ticks
-                if (tickCounter <= 9) {
-                    // اعمل click في أول 9 ticks
+                // 19 clicks كل 20 ticks
+                if (tickCounter <= 19) {
+                    // اعمل click في أول 19 ticks
                     invokeDoItemUse();
-                } else if (tickCounter >= 10) {
-                    // بعد 10 ticks، صفر الـ counter
+                } else if (tickCounter >= 20) {
+                    // بعد 20 ticks (ثانية كاملة)، صفر الـ counter
                     tickCounter = 0;
                 }
             }
@@ -190,8 +193,8 @@ jobs:
           "id": "rightclickcps",
           "version": "1.0.0",
           "name": "Right Click CPS",
-          "description": "Press RIGHT ALT to toggle! Auto right-click (18 CPS) when holding blocks. Speed Mode!",
-          "authors": [" SIGMAxox"],
+          "description": "Press RIGHT ALT to toggle! Auto right-click (19 CPS) when holding blocks. MAX SPEED!",
+          "authors": ["SIGMAxox"],
           "license": "MIT",
           "environment": "client",
           "entrypoints": {
