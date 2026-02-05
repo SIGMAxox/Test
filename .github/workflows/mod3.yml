@@ -46,7 +46,7 @@ jobs:
             public void onInitializeClient() {
                 System.out.println("[Right Click CPS] Mod loaded!");
                 System.out.println("[Right Click CPS] Press RIGHT ALT to toggle!");
-                System.out.println("[Right Click CPS] Hold right-click while holding blocks = 17 CPS (Test Mode!)");
+                System.out.println("[Right Click CPS] Hold right-click while holding blocks = 18 CPS (Speed Mode!)");
             }
         }
         EOF
@@ -81,20 +81,18 @@ jobs:
             
             private boolean wasAltPressed = false;
             private int tickCounter = 0;
-            private int patternCounter = 0;
             
             /**
              * Right Click CPS Mod - Minecraft 1.20.1
              * 
              * المميزات:
-             * ✅ Auto Right-Click: 17 CPS ثابت عند مسك البلوكات
+             * ✅ Auto Right-Click: 18 CPS ثابت عند مسك البلوكات
              * ✅ Toggle بـ RIGHT ALT  
              * ✅ يشتغل فقط لما تكون ماسك بلوكة
              * ✅ يشتغل لما تضغط Right Click مطول
              * 
              * الطريقة:
-             * - باترن متغير: 5 clicks في 6 ticks مرتين، ثم 4 clicks في 5 ticks مرة
-             * - المتوسط = 17 CPS بالظبط! ✅
+             * - 9 clicks كل 10 ticks = 18 CPS بالظبط! ✅
              * 
              * ⚠️ تحذير: هذا المود قد يعتبر غش في بعض السيرفرات!
              * استخدمه على مسؤوليتك الشخصية!
@@ -114,7 +112,7 @@ jobs:
                 if (isAltPressed && !wasAltPressed) {
                     RightClickCPSMod.isEnabled = !RightClickCPSMod.isEnabled;
                     String status = RightClickCPSMod.isEnabled ? 
-                        "§a§lON §7(17 CPS - Test Mode)" : "§c§lOFF";
+                        "§a§lON §7(18 CPS - Speed Mode)" : "§c§lOFF";
                     this.player.sendMessage(
                         Text.literal("§6§l[Right Click CPS] " + status), 
                         true
@@ -123,10 +121,9 @@ jobs:
                 
                 wasAltPressed = isAltPressed;
                 
-                // لو المود مش شغال، صفر الـ counters
+                // لو المود مش شغال، صفر الـ counter
                 if (!RightClickCPSMod.isEnabled) {
                     tickCounter = 0;
-                    patternCounter = 0;
                     return;
                 }
                 
@@ -137,18 +134,14 @@ jobs:
             /**
              * تطبيق Auto Right Click لما اللاعب ماسك بلوكة وضاغط Right Click
              * 
-             * الباترن الذكي لـ 17 CPS:
-             * - Pattern 1 & 2: 5 clicks في 6 ticks (مرتين)
-             * - Pattern 3: 4 clicks في 5 ticks (مرة واحدة)
-             * - Total: 14 clicks في 17 ticks
-             * - يكرر الـ pattern كل 17 ticks
+             * الباترن لـ 18 CPS:
+             * - 9 clicks كل 10 ticks
+             * - Tick 1-9: Click ✅
+             * - Tick 10: Skip ⏭️
              * 
              * الحسبة:
-             * - 14 clicks ÷ 17 ticks = 0.823 clicks per tick  
-             * - 0.823 × 20 ticks per second ≈ 16.5 CPS
-             * 
-             * باترن أبسط: 6 clicks كل 7 ticks ثم 5 clicks كل 6 ticks بالتبادل
-             * متوسط = 17 CPS تقريباً! 🎯
+             * - 9 clicks ÷ 10 ticks = 0.9 clicks per tick
+             * - 0.9 × 20 ticks per second = 18 CPS! 🎯
              */
             private void applyAutoRightClick() {
                 if (this.player == null) return;
@@ -159,7 +152,6 @@ jobs:
                 ItemStack mainHandStack = this.player.getMainHandStack();
                 if (mainHandStack.isEmpty() || !(mainHandStack.getItem() instanceof BlockItem)) {
                     tickCounter = 0;
-                    patternCounter = 0;
                     return;
                 }
                 
@@ -171,21 +163,18 @@ jobs:
                 
                 if (!isRightClickPressed) {
                     tickCounter = 0;
-                    patternCounter = 0;
                     return;
                 }
                 
-                // زود الـ tick counter
+                // زود الـ counter
                 tickCounter++;
                 
-                // باترن بسيط: 6 clicks كل 7 ticks
-                // ده يدينا: 6÷7 = 0.857 clicks per tick
-                // 0.857 × 20 = 17.14 CPS ✅
-                if (tickCounter <= 6) {
-                    // اعمل click في أول 6 ticks
+                // 9 clicks كل 10 ticks
+                if (tickCounter <= 9) {
+                    // اعمل click في أول 9 ticks
                     invokeDoItemUse();
-                } else if (tickCounter >= 7) {
-                    // بعد 7 ticks، صفر الـ counter
+                } else if (tickCounter >= 10) {
+                    // بعد 10 ticks، صفر الـ counter
                     tickCounter = 0;
                 }
             }
@@ -201,8 +190,8 @@ jobs:
           "id": "rightclickcps",
           "version": "1.0.0",
           "name": "Right Click CPS",
-          "description": "Press RIGHT ALT to toggle! Auto right-click (17 CPS) when holding blocks. Test Mode!",
-          "authors": ["SIGMAxox"],
+          "description": "Press RIGHT ALT to toggle! Auto right-click (18 CPS) when holding blocks. Speed Mode!",
+          "authors": [" SIGMAxox"],
           "license": "MIT",
           "environment": "client",
           "entrypoints": {
