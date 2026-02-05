@@ -46,7 +46,7 @@ jobs:
             public void onInitializeClient() {
                 System.out.println("[Right Click CPS] Mod loaded!");
                 System.out.println("[Right Click CPS] Press RIGHT ALT to toggle!");
-                System.out.println("[Right Click CPS] Hold right-click while holding blocks = 15 CPS FIXED!");
+                System.out.println("[Right Click CPS] Hold right-click while holding blocks = 16 CPS (Perfect for Bridging!)");
             }
         }
         EOF
@@ -86,7 +86,7 @@ jobs:
              * Right Click CPS Mod - Minecraft 1.20.1
              * 
              * المميزات:
-             * ✅ Auto Right-Click: 15 CPS ثابت عند مسك البلوكات
+             * ✅ Auto Right-Click: 16 CPS ثابت عند مسك البلوكات (Perfect for Bridging!)
              * ✅ Toggle بـ RIGHT ALT  
              * ✅ يشتغل فقط لما تكون ماسك بلوكة
              * ✅ يشتغل لما تضغط Right Click مطول
@@ -94,7 +94,7 @@ jobs:
              * الطريقة الصحيحة:
              * - استخدام @Invoker للوصول لـ doItemUse() اللي هي private
              * - استدعاء invokeDoItemUse() - بتعمل invoke للـ method الأصلية!
-             * - 3 clicks كل 4 ticks = 15 CPS بالظبط
+             * - 4 clicks كل 5 ticks = 16 CPS بالظبط! ✅
              * 
              * ⚠️ تحذير: هذا المود قد يعتبر غش في بعض السيرفرات!
              * استخدمه على مسؤوليتك الشخصية!
@@ -114,7 +114,7 @@ jobs:
                 if (isAltPressed && !wasAltPressed) {
                     RightClickCPSMod.isEnabled = !RightClickCPSMod.isEnabled;
                     String status = RightClickCPSMod.isEnabled ? 
-                        "§a§lON §7(15 CPS)" : "§c§lOFF";
+                        "§a§lON §7(16 CPS - Bridging Mode)" : "§c§lOFF";
                     this.player.sendMessage(
                         Text.literal("§6§l[Right Click CPS] " + status), 
                         true
@@ -136,10 +136,14 @@ jobs:
             /**
              * تطبيق Auto Right Click لما اللاعب ماسك بلوكة وضاغط Right Click
              * 
-             * الباترن:
-             * - 3 clicks كل 4 ticks = 15 CPS
-             * - Tick 1, 2, 3: Click ✅
-             * - Tick 4: Skip ⏭️
+             * الباترن الجديد:
+             * - 4 clicks كل 5 ticks = 16 CPS (Perfect for Bridging!)
+             * - Tick 1, 2, 3, 4: Click ✅
+             * - Tick 5: Skip ⏭️
+             * 
+             * الحسبة:
+             * - 4 clicks ÷ 5 ticks = 0.8 clicks per tick
+             * - 0.8 × 20 ticks per second = 16 CPS! 🎯
              */
             private void applyAutoRightClick() {
                 if (this.player == null) return;
@@ -167,12 +171,12 @@ jobs:
                 // زود الـ counter
                 tickCounter++;
                 
-                // 3 clicks كل 4 ticks
-                if (tickCounter <= 3) {
-                    // اعمل click في أول 3 ticks باستخدام الـ invoker
+                // 4 clicks كل 5 ticks
+                if (tickCounter <= 4) {
+                    // اعمل click في أول 4 ticks باستخدام الـ invoker
                     invokeDoItemUse();
-                } else if (tickCounter >= 4) {
-                    // بعد 4 ticks، صفر الـ counter
+                } else if (tickCounter >= 5) {
+                    // بعد 5 ticks، صفر الـ counter
                     tickCounter = 0;
                 }
             }
@@ -188,7 +192,7 @@ jobs:
           "id": "rightclickcps",
           "version": "1.0.0",
           "name": "Right Click CPS",
-          "description": "Press RIGHT ALT to toggle! Auto right-click (15 CPS FIXED) when holding blocks. Hold right-click and watch the magic!",
+          "description": "Press RIGHT ALT to toggle! Auto right-click (16 CPS) when holding blocks. Perfect for Bridging!",
           "authors": ["SIGMAxox"],
           "license": "MIT",
           "environment": "client",
