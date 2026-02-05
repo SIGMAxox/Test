@@ -66,14 +66,18 @@ jobs:
         import org.lwjgl.glfw.GLFW;
         import org.spongepowered.asm.mixin.Mixin;
         import org.spongepowered.asm.mixin.Shadow;
+        import org.spongepowered.asm.mixin.gen.Invoker;
         import org.spongepowered.asm.mixin.injection.At;
         import org.spongepowered.asm.mixin.injection.Inject;
         import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
         
         @Mixin(MinecraftClient.class)
-        public class MinecraftClientMixin {
+        public abstract class MinecraftClientMixin {
             @Shadow
             public ClientPlayerEntity player;
+            
+            @Invoker("doItemUse")
+            protected abstract void invokeDoItemUse();
             
             private boolean wasAltPressed = false;
             private int tickCounter = 0;
@@ -83,14 +87,14 @@ jobs:
              * 
              * المميزات:
              * ✅ Auto Right-Click: 15 CPS ثابت عند مسك البلوكات
-             * ✅ Toggle بـ RIGHT ALT
+             * ✅ Toggle بـ RIGHT ALT  
              * ✅ يشتغل فقط لما تكون ماسك بلوكة
              * ✅ يشتغل لما تضغط Right Click مطول
              * 
              * الطريقة الصحيحة:
-             * - بدل ما نستخدم interactItem، هنستخدم doItemUse()
-             * - دي الـ method اللي Minecraft نفسه بيستخدمها لما تضغط Right Click
-             * - كل tick هنشوف لو محتاجين نعمل click ولا لأ
+             * - استخدام @Invoker للوصول لـ doItemUse() اللي هي private
+             * - استدعاء invokeDoItemUse() - بتعمل invoke للـ method الأصلية!
+             * - 3 clicks كل 4 ticks = 15 CPS بالظبط
              * 
              * ⚠️ تحذير: هذا المود قد يعتبر غش في بعض السيرفرات!
              * استخدمه على مسؤوليتك الشخصية!
@@ -126,34 +130,27 @@ jobs:
                 }
                 
                 // تطبيق الـ Auto Right Click
-                applyAutoRightClick(client);
+                applyAutoRightClick();
             }
             
             /**
              * تطبيق Auto Right Click لما اللاعب ماسك بلوكة وضاغط Right Click
              * 
-             * الحسبة الجديدة:
-             * - عايزين 15 clicks في الثانية
-             * - Minecraft = 20 ticks في الثانية
-             * - عشان نعمل 15 clicks، محتاجين نعمل click كل 1.33 tick
-             * - هنزود counter كل tick
-             * - لما يوصل 3، نعمل click مرتين (2 clicks في 3 ticks = 13.33 CPS)
-             * - لما يوصل 4، نعمل click مرة واحدة (1 click في 4 ticks)
-             * - المتوسط = (2+1) clicks في (3+4) ticks = 3 clicks / 7 ticks × 20 = 8.57 CPS
-             * 
-             * تمام، خلينا نجرب طريقة أحسن:
-             * - كل 4 ticks، نعمل 3 clicks
-             * - 3 clicks ÷ 4 ticks = 0.75 clicks per tick
-             * - 0.75 × 20 ticks = 15 CPS! ✅
+             * الباترن:
+             * - 3 clicks كل 4 ticks = 15 CPS
+             * - Tick 1, 2, 3: Click ✅
+             * - Tick 4: Skip ⏭️
              */
-            private void applyAutoRightClick(MinecraftClient client) {
+            private void applyAutoRightClick() {
                 if (this.player == null) return;
+                
+                MinecraftClient client = (MinecraftClient)(Object)this;
                 
                 // التأكد إن اللاعب ماسك بلوكة في إيده
                 ItemStack mainHandStack = this.player.getMainHandStack();
                 if (mainHandStack.isEmpty() || !(mainHandStack.getItem() instanceof BlockItem)) {
                     tickCounter = 0;
-                    return; // مش ماسك بلوكة، متعملش حاجة
+                    return;
                 }
                 
                 // التأكد إن Right Click مضغوط
@@ -164,45 +161,19 @@ jobs:
                 
                 if (!isRightClickPressed) {
                     tickCounter = 0;
-                    return; // Right Click مش مضغوط
+                    return;
                 }
                 
                 // زود الـ counter
                 tickCounter++;
                 
-                // الباترن: 3 clicks كل 4 ticks
-                // Tick 1: Click
-                // Tick 2: Click
-                // Tick 3: Click
-                // Tick 4: Skip
-                // وهكذا...
-                
+                // 3 clicks كل 4 ticks
                 if (tickCounter <= 3) {
-                    // اعمل click في أول 3 ticks
-                    performRightClick(client);
+                    // اعمل click في أول 3 ticks باستخدام الـ invoker
+                    invokeDoItemUse();
                 } else if (tickCounter >= 4) {
                     // بعد 4 ticks، صفر الـ counter
                     tickCounter = 0;
-                }
-            }
-            
-            /**
-             * تنفيذ Right Click فعلي باستخدام doItemUse
-             * 
-             * ده الـ method الصحيح اللي Minecraft بيستخدمه!
-             */
-            private void performRightClick(MinecraftClient client) {
-                if (client == null || this.player == null) {
-                    return;
-                }
-                
-                try {
-                    // استدعاء doItemUse - دي الـ method الحقيقية!
-                    // دي اللي بتتنفذ لما تضغط Right Click في Minecraft
-                    client.doItemUse();
-                } catch (Exception e) {
-                    // لو حصل أي مشكلة، اطبع error
-                    System.err.println("[Right Click CPS] Error: " + e.getMessage());
                 }
             }
         }
