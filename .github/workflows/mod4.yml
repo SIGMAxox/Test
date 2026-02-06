@@ -64,7 +64,6 @@ jobs:
         import org.lwjgl.glfw.GLFW;
         import org.spongepowered.asm.mixin.Mixin;
         import org.spongepowered.asm.mixin.Shadow;
-        import org.spongepowered.asm.mixin.gen.Invoker;
         import org.spongepowered.asm.mixin.injection.At;
         import org.spongepowered.asm.mixin.injection.Inject;
         import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -73,9 +72,6 @@ jobs:
         public abstract class MinecraftClientMixin {
             @Shadow
             public ClientPlayerEntity player;
-            
-            @Invoker("doAttack")
-            protected abstract void invokeDoAttack();
             
             private boolean wasKeyPressed = false;
             
@@ -90,7 +86,7 @@ jobs:
              * 
              * الطريقة:
              * - Click في كل tick = 20 CPS (أقصى سرعة!)
-             * - استخدام doAttack() للـ left click الحقيقي
+             * - نضغط ونفك الـ attack key في كل tick
              * 
              * ⚠️ تحذير: هذا المود قد يعتبر غش في بعض السيرفرات!
              * استخدمه على مسؤوليتك الشخصية!
@@ -125,7 +121,7 @@ jobs:
                 }
                 
                 // تطبيق الـ Auto Left Click
-                applyAutoLeftClick();
+                applyAutoLeftClick(client);
             }
             
             /**
@@ -133,13 +129,11 @@ jobs:
              * 
              * الباترن:
              * - Click في كل tick = 20 CPS
-             * - استخدام doAttack() اللي بيعمل attack فعلي
+             * - نضغط ونفك الـ attack key بسرعة
              * - مثالي للـ 1.8.9 combat mechanics
              */
-            private void applyAutoLeftClick() {
-                if (this.player == null) return;
-                
-                MinecraftClient client = (MinecraftClient)(Object)this;
+            private void applyAutoLeftClick(MinecraftClient client) {
+                if (this.player == null || client.options == null) return;
                 
                 // التأكد إن Left Click مضغوط
                 boolean isLeftClickPressed = GLFW.glfwGetMouseButton(
@@ -151,9 +145,10 @@ jobs:
                     return; // Left Click مش مضغوط
                 }
                 
-                // اعمل attack في كل tick - 20 CPS!
-                // ده بيستخدم doAttack() اللي هو الـ method الأصلية للـ left click/attack
-                invokeDoAttack();
+                // اعمل left click في كل tick - 20 CPS!
+                // نضغط ونفك الـ attack key عشان يحصل attack
+                client.options.attackKey.setPressed(true);
+                client.options.attackKey.setPressed(false);
             }
         }
         EOF
