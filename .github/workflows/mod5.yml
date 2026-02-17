@@ -122,7 +122,7 @@ jobs:
     - name: Write resource files
       run: |
         cat > src/main/resources/fabric.mod.json << 'EOF'
-        {"schemaVersion":1,"id":"reachpvp","version":"1.0.0","name":"Reach PVP","description":"Press 9 to toggle!","authors":["YourName"],"license":"MIT","environment":"client","entrypoints":{"client":["com.reachpvp.ReachPVPMod"]},"mixins":["reachpvp.mixins.json"],"depends":{"fabricloader":">=0.14.19","minecraft":"1.20.1"}}
+        {"schemaVersion":1,"id":"reachpvp","version":"1.0.0","name":"Reach PVP","description":"Press 9 to toggle!","authors":["SIGMAxox"],"license":"MIT","environment":"client","entrypoints":{"client":["com.reachpvp.ReachPVPMod"]},"mixins":["reachpvp.mixins.json"],"depends":{"fabricloader":">=0.14.19","minecraft":"1.20.1"}}
         EOF
         cat > src/main/resources/reachpvp.mixins.json << 'EOF'
         {"required":true,"minVersion":"0.8","package":"com.reachpvp.mixin","compatibilityLevel":"JAVA_17","client":["MinecraftClientMixin","InteractionManagerMixin","GameRendererMixin"],"injectors":{"defaultRequire":1}}
@@ -168,13 +168,3 @@ jobs:
       with:
         name: reach-pvp-v1.0.0-mc1.20.1
         path: build/libs/*.jar
-```
-
----
-
-## 🎮 كيف يشتغل المود:
-```
-1. اضغط 9 → يتفعل المود
-2. ابص على لاعب (بعيد بـ 3.5 block)
-3. امسك Left Click → يضرب أوتوماتيك
-4. انت اللي بتصوب، المود بيضرب فقط
