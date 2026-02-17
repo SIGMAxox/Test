@@ -60,7 +60,12 @@ jobs:
         import com.leftclickcps.LeftClickCPSMod;
         import net.minecraft.client.MinecraftClient;
         import net.minecraft.client.network.ClientPlayerEntity;
+        import net.minecraft.client.network.ClientPlayerInteractionManager;
+        import net.minecraft.entity.Entity;
         import net.minecraft.text.Text;
+        import net.minecraft.util.Hand;
+        import net.minecraft.util.hit.EntityHitResult;
+        import net.minecraft.util.hit.HitResult;
         import org.lwjgl.glfw.GLFW;
         import org.spongepowered.asm.mixin.Mixin;
         import org.spongepowered.asm.mixin.Shadow;
@@ -70,34 +75,19 @@ jobs:
         
         @Mixin(MinecraftClient.class)
         public abstract class MinecraftClientMixin {
-            @Shadow
-            public ClientPlayerEntity player;
+            @Shadow public ClientPlayerEntity player;
+            @Shadow public ClientPlayerInteractionManager interactionManager;
+            @Shadow public HitResult crosshairTarget;
             
             private boolean wasKeyPressed = false;
             
-            /**
-             * Left Click CPS Mod - Minecraft 1.20.1
-             * 
-             * المميزات:
-             * ✅ Auto Left-Click: 20 CPS للـ PVP
-             * ✅ Toggle بـ KEY 0 (زر الصفر)
-             * ✅ يشتغل لما تضغط Left Click مطول
-             * ✅ مثالي للـ 1.8.9 PVP على سيرفرات 1.20.1
-             * 
-             * الطريقة:
-             * - Click في كل tick = 20 CPS (أقصى سرعة!)
-             * - نضغط ونفك الـ attack key في كل tick
-             * 
-             * ⚠️ تحذير: هذا المود قد يعتبر غش في بعض السيرفرات!
-             * استخدمه على مسؤوليتك الشخصية!
-             */
             @Inject(method = "tick", at = @At("HEAD"))
             private void onClientTick(CallbackInfo ci) {
                 if (this.player == null) return;
                 
                 MinecraftClient client = (MinecraftClient)(Object)this;
                 
-                // Toggle بـ KEY 0 (GLFW_KEY_0)
+                // Toggle بـ KEY 0
                 boolean isKeyPressed = GLFW.glfwGetKey(
                     client.getWindow().getHandle(), 
                     GLFW.GLFW_KEY_0
@@ -108,51 +98,34 @@ jobs:
                     String status = LeftClickCPSMod.isEnabled ? 
                         "§c§l⚡ PVP MODE ON (20 CPS) ⚡" : "§c§lOFF";
                     this.player.sendMessage(
-                        Text.literal("§6§l[Left Click CPS] " + status), 
-                        true
+                        Text.literal("§6§l[Left Click CPS] " + status), true
                     );
                 }
-                
                 wasKeyPressed = isKeyPressed;
                 
-                // لو المود مش شغال، متعملش حاجة
-                if (!LeftClickCPSMod.isEnabled) {
-                    return;
-                }
-                
-                // تطبيق الـ Auto Left Click
-                applyAutoLeftClick(client);
-            }
-            
-            /**
-             * تطبيق Auto Left Click للـ PVP
-             * 
-             * الباترن:
-             * - Click في كل tick = 20 CPS
-             * - نضغط ونفك الـ attack key بسرعة
-             * - مثالي للـ 1.8.9 combat mechanics
-             */
-            private void applyAutoLeftClick(MinecraftClient client) {
-                if (this.player == null || client.options == null) return;
+                if (!LeftClickCPSMod.isEnabled) return;
+                if (this.interactionManager == null) return;
                 
                 // التأكد إن Left Click مضغوط
-                boolean isLeftClickPressed = GLFW.glfwGetMouseButton(
+                boolean isLeftClickHeld = GLFW.glfwGetMouseButton(
                     client.getWindow().getHandle(),
                     GLFW.GLFW_MOUSE_BUTTON_LEFT
                 ) == GLFW.GLFW_PRESS;
                 
-                if (!isLeftClickPressed) {
-                    return; // Left Click مش مضغوط
-                }
+                if (!isLeftClickHeld) return;
                 
-                // اعمل left click في كل tick - 20 CPS!
-                // نضغط ونفك الـ attack key عشان يحصل attack
-                client.options.attackKey.setPressed(true);
-                client.options.attackKey.setPressed(false);
+                // لو في entity قدامك، اضربه مباشرة!
+                if (this.crosshairTarget != null 
+                    && this.crosshairTarget.getType() == HitResult.Type.ENTITY) {
+                    Entity target = ((EntityHitResult) this.crosshairTarget).getEntity();
+                    // attackEntity بيبعث packet للسيرفر مباشرة - ده الـ PVP الحقيقي!
+                    this.interactionManager.attackEntity(this.player, target);
+                    // swingHand عشان يظهر الـ animation
+                    this.player.swingHand(Hand.MAIN_HAND);
+                }
             }
         }
         EOF
-    
     - name: Write fabric.mod.json
       shell: bash
       run: |
