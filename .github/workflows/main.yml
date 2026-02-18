@@ -1,0 +1,215 @@
+name: Build Hitbox Expander Mod (1.20.1)
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+    - uses: gradle/gradle-build-action@v2
+      with:
+        gradle-version: 8.1
+    - name: Clean
+      run: rm -rf src/ build/ .gradle/ gradle/ *.gradle *.properties gradlew*
+    - name: Create dirs
+      run: mkdir -p src/main/java/com/hitboxexpander/mixin src/main/resources
+
+    - name: Write HitboxExpanderMod.java
+      run: |
+        cat > src/main/java/com/hitboxexpander/HitboxExpanderMod.java << 'EOF'
+        package com.hitboxexpander;
+        import net.fabricmc.api.ClientModInitializer;
+        public class HitboxExpanderMod implements ClientModInitializer {
+            public static boolean isEnabled = false;
+            // حجم الزيادة - 0.5 يعني 50% أكبر
+            public static final double EXPANSION = 0.5;
+            @Override
+            public void onInitializeClient() {
+                System.out.println("[Hitbox Expander] Loaded! Press 8 to toggle.");
+            }
+        }
+        EOF
+
+    - name: Write ClientWorldMixin.java
+      run: |
+        cat > src/main/java/com/hitboxexpander/mixin/ClientWorldMixin.java << 'EOF'
+        package com.hitboxexpander.mixin;
+        import com.hitboxexpander.HitboxExpanderMod;
+        import net.minecraft.client.MinecraftClient;
+        import net.minecraft.client.network.ClientPlayerEntity;
+        import net.minecraft.client.world.ClientWorld;
+        import net.minecraft.entity.Entity;
+        import net.minecraft.entity.player.PlayerEntity;
+        import net.minecraft.text.Text;
+        import org.lwjgl.glfw.GLFW;
+        import org.spongepowered.asm.mixin.Mixin;
+        import org.spongepowered.asm.mixin.injection.At;
+        import org.spongepowered.asm.mixin.injection.Inject;
+        import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+        @Mixin(ClientWorld.class)
+        public class ClientWorldMixin {
+            private boolean wasKeyPressed = false;
+            @Inject(method = "tick", at = @At("HEAD"))
+            private void onWorldTick(CallbackInfo ci) {
+                MinecraftClient client = MinecraftClient.getInstance();
+                if (client.player == null) return;
+                // Toggle KEY 8
+                boolean isKeyPressed = GLFW.glfwGetKey(
+                    client.getWindow().getHandle(),
+                    GLFW.GLFW_KEY_8
+                ) == GLFW.GLFW_PRESS;
+                if (isKeyPressed && !wasKeyPressed) {
+                    HitboxExpanderMod.isEnabled = !HitboxExpanderMod.isEnabled;
+                    String status = HitboxExpanderMod.isEnabled 
+                        ? "\u00a7a\u00a7lON \u00a77(Hitbox +50%)" 
+                        : "\u00a7c\u00a7lOFF";
+                    client.player.sendMessage(
+                        Text.literal("\u00a76\u00a7l[Hitbox Expander] " + status), 
+                        true
+                    );
+                }
+                wasKeyPressed = isKeyPressed;
+            }
+        }
+        EOF
+
+    - name: Write EntityMixin.java
+      run: |
+        cat > src/main/java/com/hitboxexpander/mixin/EntityMixin.java << 'EOF'
+        package com.hitboxexpander.mixin;
+        import com.hitboxexpander.HitboxExpanderMod;
+        import net.minecraft.client.MinecraftClient;
+        import net.minecraft.entity.Entity;
+        import net.minecraft.entity.player.PlayerEntity;
+        import net.minecraft.util.math.Box;
+        import org.spongepowered.asm.mixin.Mixin;
+        import org.spongepowered.asm.mixin.Shadow;
+        import org.spongepowered.asm.mixin.injection.At;
+        import org.spongepowered.asm.mixin.injection.Inject;
+        import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+        @Mixin(Entity.class)
+        public abstract class EntityMixin {
+            @Shadow public abstract Box getBoundingBox();
+            @Inject(method = "getBoundingBox", at = @At("RETURN"), cancellable = true)
+            private void onGetBoundingBox(CallbackInfoReturnable<Box> cir) {
+                if (!HitboxExpanderMod.isEnabled) return;
+                Entity entity = (Entity)(Object)this;
+                // بس للـ players اللي مش انت
+                if (!(entity instanceof PlayerEntity)) return;
+                MinecraftClient client = MinecraftClient.getInstance();
+                if (client.player == null) return;
+                if (entity == client.player) return;  // مش hitbox بتاعك!
+                // كبر الـ hitbox
+                Box original = cir.getReturnValue();
+                Box expanded = original.expand(HitboxExpanderMod.EXPANSION);
+                cir.setReturnValue(expanded);
+            }
+        }
+        EOF
+
+    - name: Write fabric.mod.json
+      run: |
+        cat > src/main/resources/fabric.mod.json << 'EOF'
+        {
+          "schemaVersion": 1,
+          "id": "hitboxexpander",
+          "version": "1.0.0",
+          "name": "Hitbox Expander",
+          "description": "Press 8 to toggle! Expands enemy hitboxes by 50% for easier aiming.",
+          "authors": ["SIGMAxox"],
+          "license": "MIT",
+          "environment": "client",
+          "entrypoints": {
+            "client": ["com.hitboxexpander.HitboxExpanderMod"]
+          },
+          "mixins": ["hitboxexpander.mixins.json"],
+          "depends": {
+            "fabricloader": ">=0.14.19",
+            "minecraft": "1.20.1"
+          }
+        }
+        EOF
+
+    - name: Write hitboxexpander.mixins.json
+      run: |
+        cat > src/main/resources/hitboxexpander.mixins.json << 'EOF'
+        {
+          "required": true,
+          "minVersion": "0.8",
+          "package": "com.hitboxexpander.mixin",
+          "compatibilityLevel": "JAVA_17",
+          "client": [
+            "ClientWorldMixin",
+            "EntityMixin"
+          ],
+          "injectors": {"defaultRequire": 1}
+        }
+        EOF
+
+    - name: Write build.gradle
+      run: |
+        cat > build.gradle << 'EOF'
+        plugins {
+            id 'fabric-loom' version '1.2-SNAPSHOT'
+            id 'maven-publish'
+        }
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+        archivesBaseName = "hitbox-expander"
+        version = "1.0.0"
+        group = "com.hitboxexpander"
+        repositories {
+            maven { url 'https://maven.fabricmc.net/' }
+            maven {
+                url 'https://www.cursemaven.com'
+                content { includeGroup "curse.maven" }
+            }
+        }
+        dependencies {
+            minecraft "com.mojang:minecraft:1.20.1"
+            mappings "net.fabricmc:yarn:1.20.1+build.10:v2"
+            modImplementation "net.fabricmc:fabric-loader:0.14.19"
+            modImplementation "curse.maven:fabric-api-306612:4902738"
+        }
+        processResources {
+            inputs.property "version", project.version
+            filesMatching("fabric.mod.json") {
+                expand "version": project.version
+            }
+        }
+        tasks.withType(JavaCompile).configureEach {
+            it.options.encoding = "UTF-8"
+            it.options.release = 17
+        }
+        java { withSourcesJar() }
+        EOF
+
+    - name: Write gradle.properties
+      run: echo 'org.gradle.jvmargs=-Xmx2G' > gradle.properties
+
+    - name: Write settings.gradle
+      run: |
+        cat > settings.gradle << 'EOF'
+        pluginManagement {
+            repositories {
+                maven { name = 'Fabric'; url = 'https://maven.fabricmc.net/' }
+                gradlePluginPortal()
+            }
+        }
+        rootProject.name = 'hitbox-expander'
+        EOF
+
+    - name: Build
+      run: |
+        gradle wrapper --gradle-version 8.1
+        chmod +x gradlew
+        ./gradlew clean build --no-daemon --stacktrace
+
+    - name: Upload JAR
+      uses: actions/upload-artifact@v4
+      with:
+        name: hitbox-expander-v1.0.0-mc1.20.1
+        path: build/libs/*.jar
