@@ -45,34 +45,37 @@ jobs:
         import net.minecraft.entity.player.PlayerEntity;
         import net.minecraft.text.Text;
         import net.minecraft.util.Hand;
-        import net.minecraft.util.math.Box;
-        import net.minecraft.util.math.Vec3d;
         import net.minecraft.util.hit.EntityHitResult;
+        import net.minecraft.util.hit.HitResult;
         import org.lwjgl.glfw.GLFW;
         import org.spongepowered.asm.mixin.Mixin;
         import org.spongepowered.asm.mixin.Shadow;
         import org.spongepowered.asm.mixin.injection.At;
         import org.spongepowered.asm.mixin.injection.Inject;
         import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-        import java.util.Optional;
         @Mixin(MinecraftClient.class)
         public abstract class MinecraftClientMixin {
             @Shadow public ClientPlayerEntity player;
             @Shadow public ClientPlayerInteractionManager interactionManager;
-            @Shadow public net.minecraft.client.world.ClientWorld world;
+            @Shadow public HitResult crosshairTarget;
             private boolean wasKeyPressed = false;
+            private int attackCooldown = 0;
             @Inject(method = "tick", at = @At("HEAD"))
             private void onClientTick(CallbackInfo ci) {
-                if (this.player == null || this.world == null) return;
+                if (this.player == null) return;
                 MinecraftClient client = (MinecraftClient)(Object)this;
                 // Toggle KEY 9
                 boolean isKeyPressed = GLFW.glfwGetKey(client.getWindow().getHandle(), GLFW.GLFW_KEY_9) == GLFW.GLFW_PRESS;
                 if (isKeyPressed && !wasKeyPressed) {
                     ReachPVPMod.isEnabled = !ReachPVPMod.isEnabled;
-                    String status = ReachPVPMod.isEnabled ? "\u00a7aON (Auto Attack 3.0)" : "\u00a7cOFF";
-                    this.player.sendMessage(Text.literal("\u00a76[Reach PVP] " + status), true);
+                    String status = ReachPVPMod.isEnabled ? "\u00a7a\u00a7lON \u00a77(Modern PVP 0.6s)" : "\u00a7c\u00a7lOFF";
+                    this.player.sendMessage(Text.literal("\u00a76\u00a7l[Reach PVP] " + status), true);
                 }
                 wasKeyPressed = isKeyPressed;
+                // تقليل الـ cooldown كل tick
+                if (attackCooldown > 0) {
+                    attackCooldown--;
+                }
                 if (!ReachPVPMod.isEnabled) return;
                 if (this.interactionManager == null) return;
                 // Left Click مضغوط؟
@@ -81,39 +84,19 @@ jobs:
                     GLFW.GLFW_MOUSE_BUTTON_LEFT
                 ) == GLFW.GLFW_PRESS;
                 if (!isLeftClickHeld) return;
-                // نحسب الـ raycast بنفسنا عشان نلاقي الـ player اللي اللاعب بيبص عليه
-                PlayerEntity target = getTargetPlayer();
-                if (target == null) return;
-                // نضرب بس لو في المدى المسموح (3.0 - vanilla)
-                if (this.player.distanceTo(target) <= ReachPVPMod.REACH) {
-                    this.interactionManager.attackEntity(this.player, target);
-                    this.player.swingHand(Hand.MAIN_HAND);
-                }
-            }
-            private PlayerEntity getTargetPlayer() {
-                if (this.player == null || this.world == null) return null;
-                // اتجاه نظر اللاعب
-                Vec3d eyePos = this.player.getEyePos();
-                Vec3d rotation = this.player.getRotationVec(1.0f);
-                Vec3d endPos = eyePos.add(rotation.multiply(ReachPVPMod.REACH));
-                // نجيب كل الـ entities في نطاق الـ reach
-                Box searchBox = this.player.getBoundingBox().stretch(rotation.multiply(ReachPVPMod.REACH)).expand(1.0);
-                PlayerEntity closest = null;
-                double closestDist = Double.MAX_VALUE;
-                for (Entity entity : this.world.getOtherEntities(this.player, searchBox)) {
-                    if (!(entity instanceof PlayerEntity)) continue;
-                    // نشوف لو الـ ray بيعدي من خلال الـ entity
-                    Box entityBox = entity.getBoundingBox().expand(0.3);
-                    Optional<Vec3d> hit = entityBox.raycast(eyePos, endPos);
-                    if (hit.isPresent()) {
-                        double dist = eyePos.distanceTo(hit.get());
-                        if (dist < closestDist) {
-                            closestDist = dist;
-                            closest = (PlayerEntity) entity;
-                        }
-                    }
-                }
-                return closest;
+                // لو لسه في cooldown، استنى
+                if (attackCooldown > 0) return;
+                // استخدام crosshairTarget مباشرة
+                if (this.crosshairTarget == null) return;
+                if (this.crosshairTarget.getType() != HitResult.Type.ENTITY) return;
+                Entity target = ((EntityHitResult) this.crosshairTarget).getEntity();
+                // بيضرب Players بس
+                if (!(target instanceof PlayerEntity)) return;
+                // اضرب ضربة واحدة
+                this.interactionManager.attackEntity(this.player, target);
+                this.player.swingHand(Hand.MAIN_HAND);
+                // حط cooldown 12 ticks (0.6 ثانية)
+                attackCooldown = 12;
             }
         }
         EOF
