@@ -1,4 +1,4 @@
-name: Build Auto W-Tap + Sprint Mod (1.20.1)
+name: Build Auto S-Tap + Sprint Mod (1.20.1)
 on:
   workflow_dispatch:
 jobs:
@@ -15,29 +15,30 @@ jobs:
     - name: Clean
       run: rm -rf src/ build/ .gradle/ gradle/ *.gradle *.properties gradlew*
     - name: Create dirs
-      run: mkdir -p src/main/java/com/wtap/mixin src/main/resources
+      run: mkdir -p src/main/java/com/stap/mixin src/main/resources
 
-    - name: Write WTapMod.java
+    - name: Write STapMod.java
       run: |
-        cat > src/main/java/com/wtap/WTapMod.java << 'EOF'
-        package com.wtap;
+        cat > src/main/java/com/stap/STapMod.java << 'EOF'
+        package com.stap;
         import net.fabricmc.api.ClientModInitializer;
-        public class WTapMod implements ClientModInitializer {
+        public class STapMod implements ClientModInitializer {
             public static boolean isEnabled = false;
             @Override
             public void onInitializeClient() {
-                System.out.println("[W-Tap] Loaded! Press + to toggle.");
+                System.out.println("[S-Tap] Loaded! Press + to toggle.");
             }
         }
         EOF
 
     - name: Write MinecraftClientMixin.java
       run: |
-        cat > src/main/java/com/wtap/mixin/MinecraftClientMixin.java << 'EOF'
-        package com.wtap.mixin;
-        import com.wtap.WTapMod;
+        cat > src/main/java/com/stap/mixin/MinecraftClientMixin.java << 'EOF'
+        package com.stap.mixin;
+        import com.stap.STapMod;
         import net.minecraft.client.MinecraftClient;
         import net.minecraft.client.network.ClientPlayerEntity;
+        import net.minecraft.client.option.KeyBinding;
         import net.minecraft.entity.Entity;
         import net.minecraft.entity.player.PlayerEntity;
         import net.minecraft.text.Text;
@@ -55,44 +56,46 @@ jobs:
             @Shadow public HitResult crosshairTarget;
             private boolean wasToggleKeyPressed = false;
             private boolean wasLeftClickPressed = false;
-            private int wTapCooldown = 0;
+            private int sTapCooldown = 0;
             @Inject(method = "tick", at = @At("HEAD"))
             private void onClientTick(CallbackInfo ci) {
                 if (this.player == null) return;
                 MinecraftClient client = (MinecraftClient)(Object)this;
                 boolean isToggleKeyPressed = GLFW.glfwGetKey(client.getWindow().getHandle(), GLFW.GLFW_KEY_EQUAL) == GLFW.GLFW_PRESS;
                 if (isToggleKeyPressed && !wasToggleKeyPressed) {
-                    WTapMod.isEnabled = !WTapMod.isEnabled;
-                    String status = WTapMod.isEnabled ? "\u00a7a\u00a7lON \u00a77(Auto Sprint + W-Tap)" : "\u00a7c\u00a7lOFF";
-                    this.player.sendMessage(Text.literal("\u00a76\u00a7l[W-Tap] " + status), true);
+                    STapMod.isEnabled = !STapMod.isEnabled;
+                    String status = STapMod.isEnabled ? "\u00a7a\u00a7lON \u00a77(Auto Sprint + S-Tap)" : "\u00a7c\u00a7lOFF";
+                    this.player.sendMessage(Text.literal("\u00a76\u00a7l[S-Tap] " + status), true);
                 }
                 wasToggleKeyPressed = isToggleKeyPressed;
-                if (WTapMod.isEnabled && this.player != null) {
+                if (STapMod.isEnabled && this.player != null) {
                     if (this.player.input.pressingForward && !this.player.isSprinting()) {
                         this.player.setSprinting(true);
                     }
                 }
-                if (wTapCooldown > 0) wTapCooldown--;
-                if (!WTapMod.isEnabled) return;
+                if (sTapCooldown > 0) sTapCooldown--;
+                if (!STapMod.isEnabled) return;
                 boolean isLeftClickPressed = GLFW.glfwGetMouseButton(client.getWindow().getHandle(), GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
                 if (isLeftClickPressed && !wasLeftClickPressed) {
                     if (this.crosshairTarget != null && this.crosshairTarget.getType() == HitResult.Type.ENTITY) {
                         Entity target = ((EntityHitResult) this.crosshairTarget).getEntity();
                         if (target instanceof PlayerEntity) {
-                            performWTap();
+                            performSTap(client);
                         }
                     }
                 }
                 wasLeftClickPressed = isLeftClickPressed;
             }
-            private void performWTap() {
-                if (wTapCooldown > 0 || this.player == null) return;
-                this.player.setSprinting(false);
-                wTapCooldown = 2;
+            private void performSTap(MinecraftClient client) {
+                if (sTapCooldown > 0 || this.player == null) return;
+                KeyBinding backward = client.options.backKey;
+                backward.setPressed(true);
+                sTapCooldown = 3;
                 new Thread(() -> {
                     try {
                         Thread.sleep(50);
-                        if (this.player != null && WTapMod.isEnabled) {
+                        backward.setPressed(false);
+                        if (this.player != null && STapMod.isEnabled) {
                             this.player.setSprinting(true);
                         }
                     } catch (InterruptedException e) {}
@@ -104,13 +107,13 @@ jobs:
     - name: Write fabric.mod.json
       run: |
         cat > src/main/resources/fabric.mod.json << 'EOF'
-        {"schemaVersion":1,"id":"wtap","version":"1.0.0","name":"Auto W-Tap + Sprint","description":"Press + to toggle! Auto sprint + W-Tap after each attack.","authors":["SIGMAxox"],"license":"MIT","environment":"client","entrypoints":{"client":["com.wtap.WTapMod"]},"mixins":["wtap.mixins.json"],"depends":{"fabricloader":">=0.14.19","minecraft":"1.20.1"}}
+        {"schemaVersion":1,"id":"stap","version":"1.0.0","name":"Auto S-Tap + Sprint","description":"Press + to toggle! Auto sprint + S-Tap after each attack for knockback + dodge.","authors":["SIGMAxox"],"license":"MIT","environment":"client","entrypoints":{"client":["com.stap.STapMod"]},"mixins":["stap.mixins.json"],"depends":{"fabricloader":">=0.14.19","minecraft":"1.20.1"}}
         EOF
 
-    - name: Write wtap.mixins.json
+    - name: Write stap.mixins.json
       run: |
-        cat > src/main/resources/wtap.mixins.json << 'EOF'
-        {"required":true,"minVersion":"0.8","package":"com.wtap.mixin","compatibilityLevel":"JAVA_17","client":["MinecraftClientMixin"],"injectors":{"defaultRequire":1}}
+        cat > src/main/resources/stap.mixins.json << 'EOF'
+        {"required":true,"minVersion":"0.8","package":"com.stap.mixin","compatibilityLevel":"JAVA_17","client":["MinecraftClientMixin"],"injectors":{"defaultRequire":1}}
         EOF
 
     - name: Write build.gradle
@@ -119,9 +122,9 @@ jobs:
         plugins { id 'fabric-loom' version '1.2-SNAPSHOT'; id 'maven-publish' }
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-        archivesBaseName = "auto-wtap-sprint"
+        archivesBaseName = "auto-stap-sprint"
         version = "1.0.0"
-        group = "com.wtap"
+        group = "com.stap"
         repositories {
             maven { url 'https://maven.fabricmc.net/' }
             maven { url 'https://www.cursemaven.com'; content { includeGroup "curse.maven" } }
@@ -144,7 +147,7 @@ jobs:
       run: |
         cat > settings.gradle << 'EOF'
         pluginManagement { repositories { maven { name = 'Fabric'; url = 'https://maven.fabricmc.net/' }; gradlePluginPortal() } }
-        rootProject.name = 'auto-wtap-sprint'
+        rootProject.name = 'auto-stap-sprint'
         EOF
 
     - name: Build
@@ -156,5 +159,5 @@ jobs:
     - name: Upload JAR
       uses: actions/upload-artifact@v4
       with:
-        name: auto-wtap-sprint-v1.0.0-mc1.20.1
+        name: auto-stap-sprint-v1.0.0-mc1.20.1
         path: build/libs/*.jar
