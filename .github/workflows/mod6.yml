@@ -1,0 +1,242 @@
+name: Build Auto W-Tap Mod (1.20.1)
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+    - uses: gradle/gradle-build-action@v2
+      with:
+        gradle-version: 8.1
+    - name: Clean
+      run: rm -rf src/ build/ .gradle/ gradle/ *.gradle *.properties gradlew*
+    - name: Create dirs
+      run: mkdir -p src/main/java/com/wtap/mixin src/main/resources
+
+    - name: Write WTapMod.java
+      run: |
+        cat > src/main/java/com/wtap/WTapMod.java << 'EOF'
+        package com.wtap;
+        import net.fabricmc.api.ClientModInitializer;
+        public class WTapMod implements ClientModInitializer {
+            public static boolean isEnabled = false;
+            @Override
+            public void onInitializeClient() {
+                System.out.println("[W-Tap] Loaded! Press + to toggle.");
+            }
+        }
+        EOF
+
+    - name: Write MinecraftClientMixin.java
+      run: |
+        cat > src/main/java/com/wtap/mixin/MinecraftClientMixin.java << 'EOF'
+        package com.wtap.mixin;
+        import com.wtap.WTapMod;
+        import net.minecraft.client.MinecraftClient;
+        import net.minecraft.client.network.ClientPlayerEntity;
+        import net.minecraft.client.network.ClientPlayerInteractionManager;
+        import net.minecraft.client.option.KeyBinding;
+        import net.minecraft.entity.Entity;
+        import net.minecraft.entity.player.PlayerEntity;
+        import net.minecraft.text.Text;
+        import net.minecraft.util.Hand;
+        import net.minecraft.util.hit.EntityHitResult;
+        import net.minecraft.util.hit.HitResult;
+        import org.lwjgl.glfw.GLFW;
+        import org.spongepowered.asm.mixin.Mixin;
+        import org.spongepowered.asm.mixin.Shadow;
+        import org.spongepowered.asm.mixin.injection.At;
+        import org.spongepowered.asm.mixin.injection.Inject;
+        import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+        @Mixin(MinecraftClient.class)
+        public abstract class MinecraftClientMixin {
+            @Shadow public ClientPlayerEntity player;
+            @Shadow public ClientPlayerInteractionManager interactionManager;
+            @Shadow public HitResult crosshairTarget;
+            private boolean wasToggleKeyPressed = false;
+            private boolean wasLeftClickPressed = false;
+            private int wTapCooldown = 0;
+            @Inject(method = "tick", at = @At("HEAD"))
+            private void onClientTick(CallbackInfo ci) {
+                if (this.player == null) return;
+                MinecraftClient client = (MinecraftClient)(Object)this;
+                // Toggle بـ + (EQUALS key بيبقى + لما تضغط Shift)
+                // بس عشان نسهلها، هنستخدم EQUALS مباشرة
+                boolean isToggleKeyPressed = GLFW.glfwGetKey(
+                    client.getWindow().getHandle(),
+                    GLFW.GLFW_KEY_EQUAL  // زرار = (نفس مكان +)
+                ) == GLFW.GLFW_PRESS;
+                if (isToggleKeyPressed && !wasToggleKeyPressed) {
+                    WTapMod.isEnabled = !WTapMod.isEnabled;
+                    String status = WTapMod.isEnabled 
+                        ? "\u00a7a\u00a7lON \u00a77(Auto W-Tap)" 
+                        : "\u00a7c\u00a7lOFF";
+                    this.player.sendMessage(
+                        Text.literal("\u00a76\u00a7l[W-Tap] " + status), 
+                        true
+                    );
+                }
+                wasToggleKeyPressed = isToggleKeyPressed;
+                // تقليل الـ cooldown
+                if (wTapCooldown > 0) {
+                    wTapCooldown--;
+                }
+                if (!WTapMod.isEnabled) return;
+                if (this.interactionManager == null) return;
+                // كشف Left Click
+                boolean isLeftClickPressed = GLFW.glfwGetMouseButton(
+                    client.getWindow().getHandle(),
+                    GLFW.GLFW_MOUSE_BUTTON_LEFT
+                ) == GLFW.GLFW_PRESS;
+                // لو ضغط Left Click جديد (مش كان مضغوط من قبل)
+                if (isLeftClickPressed && !wasLeftClickPressed) {
+                    // شوف لو في player قدامك
+                    if (this.crosshairTarget != null 
+                        && this.crosshairTarget.getType() == HitResult.Type.ENTITY) {
+                        Entity target = ((EntityHitResult) this.crosshairTarget).getEntity();
+                        if (target instanceof PlayerEntity) {
+                            // اعمل W-Tap!
+                            performWTap(client);
+                        }
+                    }
+                }
+                wasLeftClickPressed = isLeftClickPressed;
+            }
+            private void performWTap(MinecraftClient client) {
+                if (wTapCooldown > 0) return;  // لو لسه في cooldown
+                KeyBinding forward = client.options.forwardKey;
+                // W-Tap sequence:
+                // 1. فك W
+                forward.setPressed(false);
+                // 2. استنى tick واحد (هيحصل في الـ tick الجاي)
+                // 3. اضغط W تاني
+                // عشان نعمل ده صح، هنجدول الضغطة
+                wTapCooldown = 2;  // هيضغط W تاني بعد 2 ticks
+                // نجدول إعادة الضغط
+                scheduleWPress(client);
+            }
+            private void scheduleWPress(MinecraftClient client) {
+                // هنستخدم thread بسيط عشان نأخر الضغطة
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(50);  // 50ms = ~1 tick
+                        // اضغط W تاني
+                        KeyBinding forward = client.options.forwardKey;
+                        forward.setPressed(GLFW.glfwGetKey(
+                            client.getWindow().getHandle(),
+                            GLFW.GLFW_KEY_W
+                        ) == GLFW.GLFW_PRESS);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }).start();
+            }
+        }
+        EOF
+
+    - name: Write fabric.mod.json
+      run: |
+        cat > src/main/resources/fabric.mod.json << 'EOF'
+        {
+          "schemaVersion": 1,
+          "id": "wtap",
+          "version": "1.0.0",
+          "name": "Auto W-Tap",
+          "description": "Press + to toggle! Automatically performs W-Tap after each attack for extra knockback.",
+          "authors": ["SIGMAxox"],
+          "license": "MIT",
+          "environment": "client",
+          "entrypoints": {
+            "client": ["com.wtap.WTapMod"]
+          },
+          "mixins": ["wtap.mixins.json"],
+          "depends": {
+            "fabricloader": ">=0.14.19",
+            "minecraft": "1.20.1"
+          }
+        }
+        EOF
+
+    - name: Write wtap.mixins.json
+      run: |
+        cat > src/main/resources/wtap.mixins.json << 'EOF'
+        {
+          "required": true,
+          "minVersion": "0.8",
+          "package": "com.wtap.mixin",
+          "compatibilityLevel": "JAVA_17",
+          "client": [
+            "MinecraftClientMixin"
+          ],
+          "injectors": {"defaultRequire": 1}
+        }
+        EOF
+
+    - name: Write build.gradle
+      run: |
+        cat > build.gradle << 'EOF'
+        plugins {
+            id 'fabric-loom' version '1.2-SNAPSHOT'
+            id 'maven-publish'
+        }
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+        archivesBaseName = "auto-wtap"
+        version = "1.0.0"
+        group = "com.wtap"
+        repositories {
+            maven { url 'https://maven.fabricmc.net/' }
+            maven {
+                url 'https://www.cursemaven.com'
+                content { includeGroup "curse.maven" }
+            }
+        }
+        dependencies {
+            minecraft "com.mojang:minecraft:1.20.1"
+            mappings "net.fabricmc:yarn:1.20.1+build.10:v2"
+            modImplementation "net.fabricmc:fabric-loader:0.14.19"
+            modImplementation "curse.maven:fabric-api-306612:4902738"
+        }
+        processResources {
+            inputs.property "version", project.version
+            filesMatching("fabric.mod.json") {
+                expand "version": project.version
+            }
+        }
+        tasks.withType(JavaCompile).configureEach {
+            it.options.encoding = "UTF-8"
+            it.options.release = 17
+        }
+        java { withSourcesJar() }
+        EOF
+
+    - name: Write gradle.properties
+      run: echo 'org.gradle.jvmargs=-Xmx2G' > gradle.properties
+
+    - name: Write settings.gradle
+      run: |
+        cat > settings.gradle << 'EOF'
+        pluginManagement {
+            repositories {
+                maven { name = 'Fabric'; url = 'https://maven.fabricmc.net/' }
+                gradlePluginPortal()
+            }
+        }
+        rootProject.name = 'auto-wtap'
+        EOF
+
+    - name: Build
+      run: |
+        gradle wrapper --gradle-version 8.1
+        chmod +x gradlew
+        ./gradlew clean build --no-daemon --stacktrace
+
+    - name: Upload JAR
+      uses: actions/upload-artifact@v4
+      with:
+        name: auto-wtap-v1.0.0-mc1.20.1
+        path: build/libs/*.jar
