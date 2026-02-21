@@ -1,4 +1,4 @@
-name: Build Auto Break Mod (1.20.1)
+name: Build Auto Break Mod Fixed (1.20.1)
 on:
   workflow_dispatch:
 jobs:
@@ -22,11 +22,14 @@ jobs:
         cat > src/main/java/com/autobreak/AutoBreakMod.java << 'EOF'
         package com.autobreak;
         import net.fabricmc.api.ClientModInitializer;
+        import net.minecraft.util.math.BlockPos;
         public class AutoBreakMod implements ClientModInitializer {
             public static boolean isBreaking = false;
+            public static BlockPos targetPos = null;
+            public static int breakingTicks = 0;
             @Override
             public void onInitializeClient() {
-                System.out.println("[Auto Break] Loaded! Press 8 to break block in front of you.");
+                System.out.println("[Auto Break] Loaded! Hold 8 to break blocks!");
             }
         }
         EOF
@@ -59,14 +62,12 @@ jobs:
                 if (this.player == null) return;
                 MinecraftClient client = (MinecraftClient)(Object)this;
                 
-                // Check if key 8 is pressed
                 boolean isKeyPressed = GLFW.glfwGetKey(
                     client.getWindow().getHandle(),
                     GLFW.GLFW_KEY_8
                 ) == GLFW.GLFW_PRESS;
                 
-                // On key press (not hold)
-                if (isKeyPressed && !wasKeyPressed) {
+                if (isKeyPressed) {
                     if (this.crosshairTarget != null && 
                         this.crosshairTarget.getType() == HitResult.Type.BLOCK) {
                         
@@ -74,20 +75,30 @@ jobs:
                         BlockPos pos = blockHit.getBlockPos();
                         Direction side = blockHit.getSide();
                         
-                        // Start breaking the block
-                        client.interactionManager.attackBlock(pos, side);
+                        if (!AutoBreakMod.isBreaking) {
+                            AutoBreakMod.targetPos = pos;
+                            AutoBreakMod.isBreaking = true;
+                            AutoBreakMod.breakingTicks = 0;
+                            this.player.sendMessage(
+                                Text.literal("§a§l[Auto Break] §7Started breaking!"), 
+                                true
+                            );
+                        }
                         
-                        // Send feedback message
-                        this.player.sendMessage(
-                            Text.literal("§6§l[Auto Break] §7Breaking block at: §e" + 
-                                pos.getX() + ", " + pos.getY() + ", " + pos.getZ()), 
-                            true
-                        );
+                        client.interactionManager.updateBlockBreakingProgress(pos, side);
+                        AutoBreakMod.breakingTicks++;
                         
-                        AutoBreakMod.isBreaking = true;
-                    } else {
+                    }
+                } else {
+                    if (AutoBreakMod.isBreaking) {
+                        AutoBreakMod.isBreaking = false;
+                        AutoBreakMod.targetPos = null;
+                        AutoBreakMod.breakingTicks = 0;
+                        if (client.interactionManager != null) {
+                            client.interactionManager.cancelBlockBreaking();
+                        }
                         this.player.sendMessage(
-                            Text.literal("§c§l[Auto Break] §7No block targeted!"), 
+                            Text.literal("§c§l[Auto Break] §7Stopped!"), 
                             true
                         );
                     }
@@ -98,15 +109,36 @@ jobs:
         }
         EOF
 
+    - name: Write ClientPlayerInteractionManagerMixin.java
+      run: |
+        cat > src/main/java/com/autobreak/mixin/ClientPlayerInteractionManagerMixin.java << 'EOF'
+        package com.autobreak.mixin;
+        import com.autobreak.AutoBreakMod;
+        import net.minecraft.client.network.ClientPlayerInteractionManager;
+        import org.spongepowered.asm.mixin.Mixin;
+        import org.spongepowered.asm.mixin.injection.At;
+        import org.spongepowered.asm.mixin.injection.Inject;
+        import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+        @Mixin(ClientPlayerInteractionManager.class)
+        public class ClientPlayerInteractionManagerMixin {
+            @Inject(method = "isBreakingBlock", at = @At("HEAD"), cancellable = true)
+            private void onIsBreakingBlock(CallbackInfoReturnable<Boolean> cir) {
+                if (AutoBreakMod.isBreaking) {
+                    cir.setReturnValue(true);
+                }
+            }
+        }
+        EOF
+
     - name: Write fabric.mod.json
       run: |
         cat > src/main/resources/fabric.mod.json << 'EOF'
         {
           "schemaVersion": 1,
           "id": "autobreak",
-          "version": "1.0.0",
-          "name": "Auto Break",
-          "description": "Press 8 to break the block you're looking at!",
+          "version": "2.0.0",
+          "name": "Auto Break Fixed",
+          "description": "Hold 8 to continuously break the block you're looking at!",
           "authors": ["SIGMAxox"],
           "license": "MIT",
           "environment": "client",
@@ -130,7 +162,8 @@ jobs:
           "package": "com.autobreak.mixin",
           "compatibilityLevel": "JAVA_17",
           "client": [
-            "MinecraftClientMixin"
+            "MinecraftClientMixin",
+            "ClientPlayerInteractionManagerMixin"
           ],
           "injectors": {"defaultRequire": 1}
         }
@@ -145,8 +178,8 @@ jobs:
         }
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-        archivesBaseName = "auto-break"
-        version = "1.0.0"
+        archivesBaseName = "auto-break-fixed"
+        version = "2.0.0"
         group = "com.autobreak"
         repositories {
             maven { url 'https://maven.fabricmc.net/' }
@@ -186,7 +219,7 @@ jobs:
                 gradlePluginPortal()
             }
         }
-        rootProject.name = 'auto-break'
+        rootProject.name = 'auto-break-fixed'
         EOF
 
     - name: Build
@@ -198,5 +231,5 @@ jobs:
     - name: Upload JAR
       uses: actions/upload-artifact@v4
       with:
-        name: auto-break-v1.0.0-mc1.20.1
+        name: auto-break-fixed-v2.0.0-mc1.20.1
         path: build/libs/*.jar
