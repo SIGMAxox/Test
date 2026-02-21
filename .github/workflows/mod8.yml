@@ -237,7 +237,7 @@ jobs:
       run: |
         cat > build.gradle << 'EOF'
         plugins {
-            id 'fabric-loom' version '1.2-SNAPSHOT'
+            id 'fabric-loom' version '1.6-SNAPSHOT'
             id 'maven-publish'
         }
         sourceCompatibility = JavaVersion.VERSION_17
