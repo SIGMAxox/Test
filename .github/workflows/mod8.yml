@@ -247,16 +247,12 @@ jobs:
         group = "com.quicktransfer"
         repositories {
             maven { url 'https://maven.fabricmc.net/' }
-            maven {
-                url 'https://www.cursemaven.com'
-                content { includeGroup "curse.maven" }
-            }
         }
         dependencies {
             minecraft "com.mojang:minecraft:1.20.1"
             mappings "net.fabricmc:yarn:1.20.1+build.10:v2"
             modImplementation "net.fabricmc:fabric-loader:0.14.19"
-            modImplementation "curse.maven:fabric-api-306612:4902738"
+            modImplementation "net.fabricmc.fabric-api:fabric-api:0.92.2+1.20.1"
         }
         processResources {
             inputs.property "version", project.version
