@@ -25,9 +25,9 @@ jobs:
         public class FastLootMod implements ClientModInitializer {
             @Override
             public void onInitializeClient() {
-                System.out.println("[SPAM GLITCH] Loaded!");
-                System.out.println("[SPAM GLITCH] Hold F8 to spam take/return items!");
-                System.out.println("[SPAM GLITCH] ~100 cycles per second for duplication glitching!");
+                System.out.println("[SMART GLITCH] Loaded!");
+                System.out.println("[SMART GLITCH] Hold F8 to spam take/return items!");
+                System.out.println("[SMART GLITCH] Speed: 20 cycles/sec (Anti-spam safe!)");
             }
         }
         EOF
@@ -57,6 +57,7 @@ jobs:
             private boolean isSpamming = false;
             private Thread spamThread = null;
             private int spamCount = 0;
+            private static final int DELAY_MS = 50;
             @Inject(method = "tick", at = @At("HEAD"))
             private void onTick(CallbackInfo ci) {
                 ClientPlayerEntity player = net.minecraft.client.MinecraftClient.getInstance().player;
@@ -75,7 +76,7 @@ jobs:
                 isSpamming = true;
                 spamCount = 0;
                 player.sendMessage(
-                    Text.literal("\u00a7c\u00a7l[SPAM GLITCH] \u00a7eSTARTED! \u00a7c\u26a1\u26a1\u26a1"),
+                    Text.literal("\u00a7a\u00a7l[SMART GLITCH] \u00a7eSTARTED! (20/sec - Anti-spam safe)"),
                     true
                 );
                 spamThread = new Thread(() -> {
@@ -95,14 +96,14 @@ jobs:
                                     this.onMouseClick(slot, slot.id, 0, SlotActionType.QUICK_MOVE);
                                 }
                             }
-                            Thread.sleep(5);
+                            Thread.sleep(DELAY_MS / 2);
                             for (Slot slot : playerSlots) {
                                 if (slot.hasStack()) {
                                     this.onMouseClick(slot, slot.id, 0, SlotActionType.QUICK_MOVE);
                                 }
                             }
                             spamCount++;
-                            Thread.sleep(5);
+                            Thread.sleep(DELAY_MS / 2);
                         } catch (InterruptedException e) {
                             break;
                         }
@@ -117,7 +118,7 @@ jobs:
                     spamThread = null;
                 }
                 player.sendMessage(
-                    Text.literal("\u00a7a\u00a7l[SPAM GLITCH] \u00a77STOPPED! Cycled " + spamCount + " times! \u00a7a\u2713"),
+                    Text.literal("\u00a7a\u00a7l[SMART GLITCH] \u00a77STOPPED! Cycled " + spamCount + " times! \u00a7a\u2713"),
                     false
                 );
             }
@@ -131,8 +132,8 @@ jobs:
           "schemaVersion": 1,
           "id": "fastloot",
           "version": "1.0.0",
-          "name": "Spam Glitch",
-          "description": "Hold F8 to rapidly take and return items ~100 times per second. Perfect for duplication glitching on vulnerable servers!",
+          "name": "Smart Glitch",
+          "description": "Hold F8 to rapidly take/return items at 20 cycles per second. Anti-spam safe! Perfect for duplication glitching.",
           "authors": ["SIGMAxox"],
           "license": "MIT",
           "environment": "client",
